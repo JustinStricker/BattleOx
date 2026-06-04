@@ -5,11 +5,13 @@ signal slash_completed()
 
 var slash_cooldown: float = 0.0
 var is_slashing: bool = false
-var slash_trail: MeshInstance3D
 var sword_meshes: Node3D
 var _hit_enemies_this_slash: Array[Node] = []
 
-var _trail_mat: StandardMaterial3D
+var _ethereal_blade: MeshInstance3D
+var _ethereal_blade_mat: StandardMaterial3D
+var _ethereal_trail: MeshInstance3D
+var _ethereal_trail_mat: StandardMaterial3D
 var _flash_light: OmniLight3D
 var _particles: GPUParticles3D
 var _sparks: GPUParticles3D
@@ -24,7 +26,7 @@ const DASH_PATH_DEPTH: float = 24.0
 func _ready() -> void:
 	position = Vector3(0.4, -0.3, -0.5)
 	_build_sword_mesh()
-	_build_slash_trail()
+	_build_ethereal_effects()
 	_cache_slash_objects()
 
 func _process(delta: float) -> void:
@@ -268,59 +270,89 @@ func _shake_camera(amount: float, duration: float) -> void:
 	)
 
 
-func _build_slash_trail() -> void:
-	slash_trail = MeshInstance3D.new()
-	slash_trail.name = "SlashTrail"
-	slash_trail.visible = false
-	slash_trail.position = Vector3(0, -0.15, -1.8)
-	add_child(slash_trail)
+func _build_ethereal_effects() -> void:
+	_ethereal_blade_mat = StandardMaterial3D.new()
+	_ethereal_blade_mat.albedo_color = Color(0.6, 0.9, 1.0, 0.9)
+	_ethereal_blade_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ethereal_blade_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ethereal_blade_mat.emission_enabled = true
+	_ethereal_blade_mat.emission = Color(0.3, 0.7, 1.0)
+	_ethereal_blade_mat.emission_energy_multiplier = 10.0
+	_ethereal_blade_mat.no_depth_test = true
+
+	var blade_st := SurfaceTool.new()
+	blade_st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	var segs := 16
+	var blade_len := 0.8
+	var base_w := 0.05
+	var tip_w := 0.006
+	var max_curve := 0.05
+	for i in range(segs + 1):
+		var t := float(i) / float(segs)
+		var x := -(t * blade_len)
+		var z := 4.0 * max_curve * t * (1.0 - t)
+		var w := lerp(base_w, tip_w, t)
+		blade_st.set_uv(Vector2(t, 0.0))
+		blade_st.add_vertex(Vector3(x, w * 0.5, z))
+		blade_st.set_uv(Vector2(t, 1.0))
+		blade_st.add_vertex(Vector3(x, -w * 0.5, z))
+	var blade_mesh: ArrayMesh = blade_st.commit()
+
+	_ethereal_blade = MeshInstance3D.new()
+	_ethereal_blade.name = "EtherealBlade"
+	_ethereal_blade.mesh = blade_mesh
+	_ethereal_blade.material_override = _ethereal_blade_mat
+	_ethereal_blade.position = Vector3(2.5, 0, -1.5)
+	_ethereal_blade.visible = false
+	add_child(_ethereal_blade)
+
+	_ethereal_trail_mat = StandardMaterial3D.new()
+	_ethereal_trail_mat.albedo_color = Color(0.5, 0.9, 1.0, 0.0)
+	_ethereal_trail_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ethereal_trail_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ethereal_trail_mat.emission_enabled = true
+	_ethereal_trail_mat.emission = Color(0.35, 0.75, 1.0)
+	_ethereal_trail_mat.emission_energy_multiplier = 6.0
+	_ethereal_trail_mat.no_depth_test = true
+
+	var trail_grad := Gradient.new()
+	trail_grad.set_color(0, Color(1, 1, 1, 0.0))
+	trail_grad.add_point(0.2, Color(1, 1, 1, 0.1))
+	trail_grad.add_point(0.5, Color(1, 1, 1, 0.4))
+	trail_grad.add_point(0.8, Color(1, 1, 1, 0.8))
+	trail_grad.set_color(trail_grad.get_point_count() - 1, Color(1, 1, 1, 1.0))
+	var trail_grad_tex := GradientTexture1D.new()
+	trail_grad_tex.gradient = trail_grad
+	_ethereal_trail_mat.albedo_texture = trail_grad_tex
+	_ethereal_trail_mat.uv1_scale = Vector3(1, 1, 1)
+
+	var trail_st := SurfaceTool.new()
+	trail_st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	var trail_segs := 24
+	var trail_w := 3.5
+	var trail_bow := 0.6
+	var trail_thick := 0.06
+	for i in range(trail_segs + 1):
+		var t := float(i) / float(trail_segs)
+		var x := -trail_w * 0.5 + trail_w * t
+		var z := -trail_bow * sin(t * PI)
+		var w := trail_thick * (0.3 + sin(t * PI) * 0.7)
+		trail_st.set_uv(Vector2(t, 0))
+		trail_st.add_vertex(Vector3(x, w, z))
+		trail_st.set_uv(Vector2(t, 1))
+		trail_st.add_vertex(Vector3(x, -w, z))
+	var trail_mesh: ArrayMesh = trail_st.commit()
+
+	_ethereal_trail = MeshInstance3D.new()
+	_ethereal_trail.name = "EtherealTrail"
+	_ethereal_trail.mesh = trail_mesh
+	_ethereal_trail.material_override = _ethereal_trail_mat
+	_ethereal_trail.position = Vector3(0, 0, -1.5)
+	_ethereal_trail.visible = false
+	add_child(_ethereal_trail)
 
 
 func _cache_slash_objects() -> void:
-	_trail_mat = StandardMaterial3D.new()
-	_trail_mat.albedo_color = Color(0.4, 0.85, 1.0, 1.0)
-	_trail_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_trail_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_trail_mat.emission_enabled = true
-	_trail_mat.emission = Color(0.4, 0.85, 1.0)
-	_trail_mat.emission_energy_multiplier = 5.0
-	_trail_mat.no_depth_test = true
-
-	# Gradient alpha texture — fades from center outward horizontally
-	var fade_grad := Gradient.new()
-	fade_grad.set_color(0, Color(1, 1, 1, 0.0))
-	fade_grad.add_point(0.15, Color(1, 1, 1, 0.25))
-	fade_grad.add_point(0.35, Color(1, 1, 1, 0.8))
-	fade_grad.add_point(0.5, Color(1, 1, 1, 1.0))
-	fade_grad.add_point(0.65, Color(1, 1, 1, 0.8))
-	fade_grad.add_point(0.85, Color(1, 1, 1, 0.25))
-	fade_grad.set_color(fade_grad.get_point_count() - 1, Color(1, 1, 1, 0.0))
-	var fade_tex := GradientTexture1D.new()
-	fade_tex.gradient = fade_grad
-	_trail_mat.albedo_texture = fade_tex
-	_trail_mat.uv1_scale = Vector3(1, 1, 1)
-
-	# Build a curved horizontal swipe arc mesh
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	var segments := 24
-	var swipe_width := 3.0
-	var swipe_bow := 0.8
-	var swipe_thickness := 0.04
-	for i in range(segments + 1):
-		var t := float(i) / float(segments)
-		var x := -swipe_width * 0.5 + swipe_width * t
-		var z := -swipe_bow * sin(t * PI)
-		var w := swipe_thickness * (0.3 + sin(t * PI) * 0.7)
-		st.set_uv(Vector2(t, 0))
-		st.add_vertex(Vector3(x, w, z))
-		st.set_uv(Vector2(t, 1))
-		st.add_vertex(Vector3(x, -w, z))
-	var swipe_mesh: ArrayMesh = st.commit()
-	slash_trail.mesh = swipe_mesh
-	slash_trail.material_override = _trail_mat
-	slash_trail.visible = false
-
 	_flash_light = OmniLight3D.new()
 	_flash_light.light_color = Color(0.7, 0.85, 1.0)
 	_flash_light.light_energy = 12.0
@@ -398,8 +430,14 @@ func _cache_slash_objects() -> void:
 func _play_slash_animation() -> void:
 	_hit_enemies_this_slash = []
 
-	_trail_mat.albedo_color.a = 1.0
-	slash_trail.material_override = _trail_mat
+	_ethereal_blade_mat.albedo_color.a = 0.9
+	_ethereal_blade.position = Vector3(2.5, 0, -1.5)
+	_ethereal_blade.visible = true
+
+	_ethereal_trail_mat.albedo_color.a = 0.0
+	_ethereal_trail_mat.uv1_offset = Vector3(-0.9, 0, 0)
+	_ethereal_trail.visible = true
+
 	_flash_light.light_energy = 8.0
 	_flash_light.visible = false
 	_particles.restart()
@@ -414,11 +452,9 @@ func _play_slash_animation() -> void:
 	sword_meshes.scale = Vector3.ONE
 	_sword_pivot.rotation = Vector3.ZERO
 	sword_meshes.visible = true
-	slash_trail.visible = true
 
 	_perform_slash_hit()
 
-	# Blade energy glow ramps up
 	_blade_glow_mat.emission_energy_multiplier = 12.0
 	_blade_glow_mat.albedo_color.a = 0.55
 
@@ -430,11 +466,16 @@ func _play_slash_animation() -> void:
 	_sparks.emitting = true
 	_flash_light.visible = true
 
+	var total_sweep := SLASH_DURATION + SHEATHE_DURATION
+
 	tween.tween_property(sword_meshes, "position", END_POS, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(sword_meshes, "rotation:x", END_ROT.x, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(_sword_pivot, "rotation:z", END_ROT.z, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(sword_meshes, "scale", Vector3(0.9, 0.9, 0.9), SLASH_DURATION * 0.4).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.parallel().tween_property(_trail_mat, "albedo_color:a", 0.0, SLASH_DURATION * 0.6 + SHEATHE_DURATION).set_ease(Tween.EASE_IN)
+
+	tween.parallel().tween_property(_ethereal_blade, "position:x", -2.5, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.parallel().tween_property(_ethereal_trail_mat, "uv1_offset:x", 0.0, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.parallel().tween_property(_ethereal_trail_mat, "albedo_color:a", 0.6, SLASH_DURATION * 0.6).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(_flash_light, "light_energy", 0.0, 0.18).set_ease(Tween.EASE_IN)
 	tween.parallel().tween_property(_blade_glow_mat, "emission_energy_multiplier", 0.0, 0.2).set_ease(Tween.EASE_IN)
 	tween.parallel().tween_property(_blade_glow_mat, "albedo_color:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
@@ -442,11 +483,14 @@ func _play_slash_animation() -> void:
 	tween.tween_property(sword_meshes, "position", SHEATHE_POS, SHEATHE_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(sword_meshes, "rotation", SHEATHE_ROT, SHEATHE_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(_sword_pivot, "rotation:z", SHEATHE_ROT.z, SHEATHE_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.parallel().tween_property(_ethereal_blade_mat, "albedo_color:a", 0.0, SHEATHE_DURATION * 0.5).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(_ethereal_trail_mat, "albedo_color:a", 0.0, SHEATHE_DURATION * 0.5).set_ease(Tween.EASE_IN)
 
 	tween.tween_callback(func():
 		sword_meshes.visible = false
 		sword_meshes.scale = Vector3.ONE
-		slash_trail.visible = false
+		_ethereal_blade.visible = false
+		_ethereal_trail.visible = false
 		_flash_light.visible = false
 		is_slashing = false
 		slash_completed.emit()
