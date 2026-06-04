@@ -1,0 +1,108 @@
+extends Node3D
+
+signal charge_changed(charge: float)
+signal ultimate_fired()
+
+var charge: float = 0.0
+var cooldown: float = 0.0
+
+const MAX_CHARGE: float = 1.0
+const CHARGE_PER_DAMAGE: float = 0.02
+const COOLDOWN_DURATION: float = 1.0
+
+const ProjectileScript = preload("res://src/player/ultimate_projectile.gd")
+
+
+func _ready() -> void:
+	EventBus.damage_dealt.connect(_on_damage_dealt)
+
+
+func _process(delta: float) -> void:
+	cooldown = max(cooldown - delta, 0.0)
+
+
+func _on_damage_dealt(amount: int) -> void:
+	if charge >= MAX_CHARGE:
+		return
+	charge = min(charge + amount * CHARGE_PER_DAMAGE, MAX_CHARGE)
+	charge_changed.emit(charge)
+
+
+func can_fire() -> bool:
+	return charge >= MAX_CHARGE and cooldown <= 0.0
+
+
+func try_fire() -> bool:
+	if not can_fire():
+		return false
+
+	charge = 0.0
+	cooldown = COOLDOWN_DURATION
+	charge_changed.emit(charge)
+
+	_spawn_projectile()
+
+	var camera := get_parent() as Camera3D
+	var bow := camera.get_node_or_null("Bow") as Node3D
+	if bow:
+		bow.cancel_charge()
+		bow.visible = false
+
+	AudioManager.play_ultimate_fire()
+	_shake_camera(0.025, 0.3)
+	_flash_camera(5.0, 0.1)
+	ultimate_fired.emit()
+
+	var tween := create_tween()
+	tween.tween_interval(0.5)
+	tween.tween_callback(func():
+		if is_instance_valid(bow):
+			bow.visible = true
+	)
+
+	return true
+
+
+func _spawn_projectile() -> void:
+	var camera := get_parent() as Camera3D
+	var origin := camera.global_position
+	var direction := -camera.global_transform.basis.z
+
+	var projectile := Node3D.new()
+	projectile.set_script(ProjectileScript)
+	projectile.setup(origin, direction.normalized())
+	get_tree().current_scene.add_child(projectile)
+
+
+func _shake_camera(amount: float, duration: float) -> void:
+	var camera := get_parent() as Camera3D
+	if not camera:
+		return
+	var orig_rot_x := camera.rotation.x
+	var orig_rot_y := camera.rotation.y
+	var tween := create_tween()
+	var elapsed := 0.0
+	tween.tween_method(func(_v: Variant):
+		elapsed += get_process_delta_time()
+		if not is_instance_valid(camera):
+			tween.kill()
+			return
+		var decay: float = max(1.0 - elapsed / duration, 0.0)
+		camera.rotation.x = orig_rot_x + randf_range(-amount, amount) * decay
+		camera.rotation.y = orig_rot_y + randf_range(-amount, amount) * decay
+	, 0.0, 1.0, duration)
+	tween.tween_callback(func():
+		if is_instance_valid(camera):
+			camera.rotation.x = orig_rot_x
+			camera.rotation.y = orig_rot_y
+	)
+
+
+func _flash_camera(fov_increase: float, duration: float) -> void:
+	var camera := get_parent() as Camera3D
+	if not camera:
+		return
+	var orig_fov := camera.fov
+	var tween := create_tween()
+	tween.tween_property(camera, "fov", orig_fov + fov_increase, 0.05).set_ease(Tween.EASE_OUT)
+	tween.tween_property(camera, "fov", orig_fov, duration).set_ease(Tween.EASE_IN)

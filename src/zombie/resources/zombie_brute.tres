@@ -1,0 +1,29 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/zombie/zombie_type.gd" id="1_bsoat"]
+
+[resource]
+script = ExtResource("1_bsoat")
+type_name = "Brute"
+health = 50
+speed_multiplier = 0.55
+damage = 14
+body_scale_min = 3.9
+body_scale_max = 8.0
+arm_radius = 0.065
+leg_radius = 0.08
+color_hue_min = 0.0
+color_hue_max = 0.02
+color_saturation = 0.6
+color_value = 0.18
+head_style = 2
+horn_length = 0.18
+claw_length = 0.1
+spike_size = 0.09
+arm_length_mult = 1.15
+leg_style = 0
+hunch = 0.25
+emissive_color = Color(0.53, 0.0, 0.0, 1.0)
+emissive_strength = 2.0
+roughness = 0.35
+metallic = 0.3

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/zombie/zombie_type.gd" id="1_mqsu5"]
+
+[resource]
+script = ExtResource("1_mqsu5")
+type_name = "Runner"
+health = 12
+speed_multiplier = 1.6
+damage = 8
+body_scale_min = 2.25
+body_scale_max = 4.75
+arm_radius = 0.03
+leg_radius = 0.05
+color_hue_min = 0.0
+color_hue_max = 0.04
+color_saturation = 0.25
+color_value = 0.55
+head_style = 2
+horn_length = 0.07
+claw_length = 0.08
+spike_size = 0.0
+arm_length_mult = 1.5
+leg_style = 1
+hunch = 0.15
+emissive_color = Color(1.0, 0.27, 0.0, 1.0)
+emissive_strength = 3.0
+roughness = 0.5
+metallic = 0.15

@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/ui/loading_screen.gd" id="1_abcde"]
+
+[node name="LoadingScreen" type="CanvasLayer"]
+script = ExtResource("1_abcde")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.0, 0.0, 0.0, 0.85)
+mouse_filter = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -60.0
+offset_right = 200.0
+offset_bottom = 60.0
+theme_overrides/constants/separation = 16
+
+[node name="MessageLabel" type="Label" parent="VBoxContainer"]
+text = "Generating World..."
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_overrides/font_sizes/font_size = 28
+
+[node name="ProgressBar" type="ProgressBar" parent="VBoxContainer"]
+min_value = 0.0
+max_value = 1.0
+value = 0.0
+size_flags_horizontal = 3

@@ -1,0 +1,79 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://src/player/player.gd" id="1_mpobc"]
+[ext_resource type="Script" path="res://src/player/bow.gd" id="2_bowxx"]
+[ext_resource type="Script" path="res://src/player/sword_slash.gd" id="3_swordx"]
+[ext_resource type="Script" path="res://src/player/wings.gd" id="4_wingsx"]
+[ext_resource type="Script" path="res://src/player/ultimate.gd" id="5_ultimx"]
+
+[sub_resource type="CapsuleShape3D" id="2_csxly"]
+radius = 0.5
+height = 1.6
+
+[sub_resource type="StandardMaterial3D" id="3_bodymat"]
+albedo_color = Color(0.3, 0.6, 0.9, 1.0)
+metallic = 0.1
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="4_torsomesh"]
+size = Vector3(0.8, 1.0, 0.6)
+material = SubResource("3_bodymat")
+
+[sub_resource type="StandardMaterial3D" id="5_headmat"]
+albedo_color = Color(1.0, 0.85, 0.7, 1.0)
+roughness = 0.3
+
+[sub_resource type="SphereMesh" id="6_headmesh"]
+radius = 0.45
+height = 0.9
+material = SubResource("5_headmat")
+
+[sub_resource type="StandardMaterial3D" id="7_eyemat"]
+albedo_color = Color(0.1, 0.1, 0.1, 1.0)
+
+[sub_resource type="SphereMesh" id="8_eyemesh"]
+radius = 0.08
+height = 0.16
+material = SubResource("7_eyemat")
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_mpobc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("2_csxly")
+
+[node name="Torso" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("4_torsomesh")
+position = Vector3(0, -0.4, 0)
+
+[node name="Head" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("6_headmesh")
+position = Vector3(0, 0.45, 0)
+
+[node name="LeftEye" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("8_eyemesh")
+position = Vector3(-0.2, 0.55, 0.45)
+
+[node name="RightEye" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("8_eyemesh")
+position = Vector3(0.2, 0.55, 0.45)
+
+[node name="Camera3D" type="Camera3D" parent="."]
+current = true
+position = Vector3(0, 1.5, 0)
+
+[node name="Bow" type="Node3D" parent="Camera3D"]
+script = ExtResource("2_bowxx")
+
+[node name="SwordSlash" type="Node3D" parent="Camera3D"]
+script = ExtResource("3_swordx")
+
+[node name="Wings" type="Node3D" parent="Camera3D"]
+script = ExtResource("4_wingsx")
+
+[node name="Ultimate" type="Node3D" parent="Camera3D"]
+script = ExtResource("5_ultimx")

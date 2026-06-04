@@ -1,0 +1,33 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/zombie/zombie.gd" id="1_xevmh"]
+[ext_resource type="PackedScene" path="res://src/zombie/zombie_skeleton.tscn" id="2_pah7h"]
+[ext_resource type="Script" path="res://src/zombie/components/health_component.gd" id="3_8cs8m"]
+[ext_resource type="Script" path="res://src/zombie/components/perception_component.gd" id="4_n0xxl"]
+[ext_resource type="Script" path="res://src/zombie/components/movement_component.gd" id="5_2mgnc"]
+[ext_resource type="Script" path="res://src/zombie/components/ai_state_machine.gd" id="6_7mqdp"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_xlg2h"]
+radius = 0.4
+height = 1.4
+
+[node name="Zombie" type="CharacterBody3D"]
+script = ExtResource("1_xevmh")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_xlg2h")
+position = Vector3(0, 0.7, 0)
+
+[node name="ZombieSkeleton" parent="." instance=ExtResource("2_pah7h")]
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("3_8cs8m")
+
+[node name="PerceptionComponent" type="Node" parent="."]
+script = ExtResource("4_n0xxl")
+
+[node name="MovementComponent" type="Node" parent="."]
+script = ExtResource("5_2mgnc")
+
+[node name="AIStateMachine" type="Node" parent="."]
+script = ExtResource("6_7mqdp")

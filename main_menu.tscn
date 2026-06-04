@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://mainmenu"]
+
+[ext_resource type="Script" path="res://main_menu.gd" id="1_mainmn"]
+
+[node name="MainMenu" type="Control"]
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_mainmn")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.05, 0.05, 0.1, 1.0)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -120.0
+offset_right = 150.0
+offset_bottom = 120.0
+
+[node name="TitleLabel" type="Label" parent="VBoxContainer"]
+text = "SURVIVAL"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_overrides/font_sizes/font_size = 56
+theme_overrides/colors/font_color = Color(0.5, 0.85, 1.0, 1.0)
+
+[node name="Spacer" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+
+[node name="PlayButton" type="Button" parent="VBoxContainer"]
+text = "PLAY"
+custom_minimum_size = Vector2(200, 50)
+theme_overrides/font_sizes/font_size = 28
+
+[node name="QuitButton" type="Button" parent="VBoxContainer"]
+text = "QUIT"
+custom_minimum_size = Vector2(200, 50)
+theme_overrides/font_sizes/font_size = 28
