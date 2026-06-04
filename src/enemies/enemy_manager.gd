@@ -1,11 +1,11 @@
 extends Node
 
-signal zombie_killed(score_amount: int)
+signal enemy_killed(score_amount: int)
 
-const ZombieScene = preload("res://src/zombie/zombie.tscn")
-const ShamblerType = preload("res://src/zombie/resources/zombie_shambler.tres")
-const RunnerType = preload("res://src/zombie/resources/zombie_runner.tres")
-const BruteType = preload("res://src/zombie/resources/zombie_brute.tres")
+const EnemyScene = preload("res://src/enemy/enemy.tscn")
+const ShamblerType = preload("res://src/enemy/resources/zombie_shambler.tres")
+const RunnerType = preload("res://src/enemy/resources/zombie_runner.tres")
+const BruteType = preload("res://src/enemy/resources/zombie_brute.tres")
 
 @export var world_gen: WorldGen
 
@@ -13,13 +13,13 @@ const BruteType = preload("res://src/zombie/resources/zombie_brute.tres")
 @export var type_weight_runner: float = 25.0
 @export var type_weight_brute: float = 15.0
 
-var max_zombies: int = 60
+var max_enemies: int = 60
 var spawn_cooldown: float = 2.0
 var spawn_timer: float = 0.0
 var min_spawn_dist: float = 16.0
 var max_spawn_dist: float = 60.0
 
-var zombies: Array[Zombie] = []
+var enemies: Array[Enemy] = []
 
 var _raycast_cache: Dictionary = {}
 var _raycast_cache_times: Dictionary = {}
@@ -39,7 +39,7 @@ func _process(delta: float) -> void:
 
 
 func _cleanup_dead() -> void:
-	zombies = zombies.filter(func(z): return is_instance_valid(z)) as Array[Zombie]
+	enemies = enemies.filter(func(e): return is_instance_valid(e)) as Array[Enemy]
 
 
 func roll_zombie_type() -> ZombieType:
@@ -76,7 +76,7 @@ func _ground_height_at(x: float, z: float) -> float:
 
 
 func _try_spawn() -> void:
-	if zombies.size() >= max_zombies:
+	if enemies.size() >= max_enemies:
 		return
 
 	var player := get_tree().get_first_node_in_group("player")
@@ -116,14 +116,14 @@ func _try_spawn() -> void:
 			# the next spawn attempt will re-query.
 			continue
 
-		var zombie: Zombie = ZombieScene.instantiate() as Zombie
-		add_child(zombie)
-		zombie.global_position = Vector3(sx, h + 15.0, sz)
-		zombies.append(zombie)
-		zombie.died.connect(_on_zombie_died.bind(zombie))
+		var enemy: Enemy = EnemyScene.instantiate() as Enemy
+		add_child(enemy)
+		enemy.global_position = Vector3(sx, h + 15.0, sz)
+		enemies.append(enemy)
+		enemy.died.connect(_on_enemy_died.bind(enemy))
 		return
 
 
-func _on_zombie_died(pos: Vector3, zombie: Zombie) -> void:
-	zombie_killed.emit(zombie.zombie_type.health)
+func _on_enemy_died(pos: Vector3, enemy: Enemy) -> void:
+	enemy_killed.emit(enemy.zombie_type.health)
 	_cleanup_dead()

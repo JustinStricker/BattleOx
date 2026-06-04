@@ -11,7 +11,7 @@ const HIT_BOX_DEPTH := 6.0
 var direction: Vector3
 var traveled: float = 0.0
 var tick_timer: float = 0.0
-var hit_zombies: Array[Node] = []
+var hit_enemies: Array[Node] = []
 
 var _beam_mat: ShaderMaterial
 
@@ -123,10 +123,10 @@ func _physics_process(delta: float) -> void:
 	if tick_timer >= TICK_INTERVAL:
 		tick_timer = 0.0
 		AudioManager.play_beam_tick()
-		_hit_zombies()
+		_hit_enemies()
 
 
-func _hit_zombies() -> void:
+func _hit_enemies() -> void:
 	var space_state := get_world_3d().direct_space_state
 	if not space_state:
 		return
@@ -150,10 +150,10 @@ func _hit_zombies() -> void:
 	var results: Array[Dictionary] = space_state.intersect_shape(query)
 	for result in results:
 		var collider: Node = result.collider
-		if not collider or not collider.is_in_group("zombie"):
+		if not collider or not collider.is_in_group("enemy"):
 			continue
-		if collider in hit_zombies:
+		if collider in hit_enemies:
 			continue
-		hit_zombies.append(collider)
+		hit_enemies.append(collider)
 		if collider.has_method("take_damage"):
 			collider.take_damage(DAMAGE_PER_TICK, true)

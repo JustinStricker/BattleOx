@@ -1,17 +1,17 @@
 [gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://src/zombie/zombie.gd" id="1_xevmh"]
-[ext_resource type="PackedScene" path="res://src/zombie/zombie_skeleton.tscn" id="2_pah7h"]
-[ext_resource type="Script" path="res://src/zombie/components/health_component.gd" id="3_8cs8m"]
-[ext_resource type="Script" path="res://src/zombie/components/perception_component.gd" id="4_n0xxl"]
-[ext_resource type="Script" path="res://src/zombie/components/movement_component.gd" id="5_2mgnc"]
-[ext_resource type="Script" path="res://src/zombie/components/ai_state_machine.gd" id="6_7mqdp"]
+[ext_resource type="Script" path="res://src/enemy/enemy.gd" id="1_xevmh"]
+[ext_resource type="PackedScene" path="res://src/enemy/zombie_skeleton.tscn" id="2_pah7h"]
+[ext_resource type="Script" path="res://src/enemy/components/health_component.gd" id="3_8cs8m"]
+[ext_resource type="Script" path="res://src/enemy/components/perception_component.gd" id="4_n0xxl"]
+[ext_resource type="Script" path="res://src/enemy/components/movement_component.gd" id="5_2mgnc"]
+[ext_resource type="Script" path="res://src/enemy/components/ai_state_machine.gd" id="6_7mqdp"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_xlg2h"]
 radius = 0.4
 height = 1.4
 
-[node name="Zombie" type="CharacterBody3D"]
+[node name="Enemy" type="CharacterBody3D"]
 script = ExtResource("1_xevmh")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

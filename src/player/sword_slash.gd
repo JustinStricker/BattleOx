@@ -7,6 +7,7 @@ var slash_cooldown: float = 0.0
 var is_slashing: bool = false
 var slash_trail: MeshInstance3D
 var sword_meshes: Node3D
+var _hit_enemies_this_slash: Array[Node] = []
 
 var _trail_mat: StandardMaterial3D
 var _flash_light: OmniLight3D
@@ -223,14 +224,13 @@ func _perform_slash_hit() -> void:
 	var results: Array[Dictionary] = space_state.intersect_shape(query)
 
 	var hit_any := false
-	var hit_zombies: Array[Node] = []
 	for result in results:
 		var collider: Node = result.collider
-		if not collider or not collider.is_in_group("zombie"):
+		if not collider or not collider.is_in_group("enemy"):
 			continue
-		if collider in hit_zombies:
+		if collider in _hit_enemies_this_slash:
 			continue
-		hit_zombies.append(collider)
+		_hit_enemies_this_slash.append(collider)
 		if collider.has_method("take_damage"):
 			collider.take_damage(SLASH_DAMAGE, true)
 			EventBus.damage_dealt.emit(SLASH_DAMAGE)
@@ -240,6 +240,9 @@ func _perform_slash_hit() -> void:
 		AudioManager.play_sword_hit()
 		_shake_camera(0.015, 0.12)
 
+
+func check_hit() -> void:
+	_perform_slash_hit()
 
 func _shake_camera(amount: float, duration: float) -> void:
 	var camera: Camera3D = get_parent() as Camera3D
@@ -269,7 +272,8 @@ func _build_slash_trail() -> void:
 	slash_trail = MeshInstance3D.new()
 	slash_trail.name = "SlashTrail"
 	slash_trail.visible = false
-	_sword_pivot.add_child(slash_trail)
+	slash_trail.position = Vector3(0, -0.15, -1.8)
+	add_child(slash_trail)
 
 
 func _cache_slash_objects() -> void:
@@ -296,25 +300,25 @@ func _cache_slash_objects() -> void:
 	_trail_mat.albedo_texture = fade_tex
 	_trail_mat.uv1_scale = Vector3(1, 1, 1)
 
-	# Build a flat horizontal energy beam mesh
+	# Build a curved horizontal swipe arc mesh
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	var half_w := 0.3
-	var half_h := 0.035
-	# Triangle strip: top-left, top-right, bottom-left, bottom-right
-	st.set_uv(Vector2(0, 0))
-	st.add_vertex(Vector3(-half_w, half_h, 0))
-	st.set_uv(Vector2(1, 0))
-	st.add_vertex(Vector3(half_w, half_h, 0))
-	st.set_uv(Vector2(0, 1))
-	st.add_vertex(Vector3(-half_w, -half_h, 0))
-	st.set_uv(Vector2(1, 1))
-	st.add_vertex(Vector3(half_w, -half_h, 0))
-	var beam_mesh: ArrayMesh = st.commit()
-	slash_trail.mesh = beam_mesh
+	var segments := 24
+	var swipe_width := 3.0
+	var swipe_bow := 0.8
+	var swipe_thickness := 0.04
+	for i in range(segments + 1):
+		var t := float(i) / float(segments)
+		var x := -swipe_width * 0.5 + swipe_width * t
+		var z := -swipe_bow * sin(t * PI)
+		var w := swipe_thickness * (0.3 + sin(t * PI) * 0.7)
+		st.set_uv(Vector2(t, 0))
+		st.add_vertex(Vector3(x, w, z))
+		st.set_uv(Vector2(t, 1))
+		st.add_vertex(Vector3(x, -w, z))
+	var swipe_mesh: ArrayMesh = st.commit()
+	slash_trail.mesh = swipe_mesh
 	slash_trail.material_override = _trail_mat
-	# Position along the blade in pivot space (blade runs ~x=-0.12 to -0.62)
-	slash_trail.position = Vector3(-0.37, 0, 0)
 	slash_trail.visible = false
 
 	_flash_light = OmniLight3D.new()
@@ -392,6 +396,8 @@ func _cache_slash_objects() -> void:
 
 
 func _play_slash_animation() -> void:
+	_hit_enemies_this_slash = []
+
 	_trail_mat.albedo_color.a = 1.0
 	slash_trail.material_override = _trail_mat
 	_flash_light.light_energy = 8.0

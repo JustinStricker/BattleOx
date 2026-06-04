@@ -348,6 +348,8 @@ func _physics_process(delta: float) -> void:
 			velocity *= 0.2
 			move_and_slide()
 			return
+		if slash_ability and slash_ability.has_method("check_hit"):
+			slash_ability.check_hit()
 		velocity.y -= gravity * delta
 		move_and_slide()
 		return

@@ -157,7 +157,7 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 
 	var z_damage := 25
 	arrow.body_entered.connect(func(body: Node):
-		if body.is_in_group("zombie"):
+		if body.is_in_group("enemy"):
 			if body.has_method("take_damage"):
 				body.take_damage(z_damage, true)
 				EventBus.damage_dealt.emit(z_damage)

@@ -1,6 +1,6 @@
 [gd_resource type="Resource" load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://src/zombie/zombie_type.gd" id="1_bsoat"]
+[ext_resource type="Script" path="res://src/enemy/zombie_type.gd" id="1_bsoat"]
 
 [resource]
 script = ExtResource("1_bsoat")

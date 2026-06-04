@@ -1,5 +1,5 @@
 extends CharacterBody3D
-class_name Zombie
+class_name Enemy
 
 signal died(pos: Vector3)
 
@@ -23,7 +23,7 @@ var _prev_ai_state: int = -1
 
 
 func _ready() -> void:
-	add_to_group("zombie")
+	add_to_group("enemy")
 	collision_layer = 2
 	up_direction = Vector3.UP
 	_pick_type_and_build()
@@ -41,7 +41,7 @@ func _pick_type_and_build() -> void:
 	if zm and zm.has_method("roll_zombie_type"):
 		zombie_type = zm.roll_zombie_type()
 	if zombie_type == null:
-		zombie_type = preload("res://src/zombie/resources/zombie_shambler.tres")
+		zombie_type = preload("res://src/enemy/resources/zombie_shambler.tres")
 
 	var body_scale: float = randf_range(zombie_type.body_scale_min, zombie_type.body_scale_max)
 	skeleton.build(zombie_type, body_scale)
@@ -89,7 +89,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_ai_attack(target: Node3D, damage: int) -> void:
-	AudioManager.play_zombie_attack()
+	AudioManager.play_enemy_attack()
 	if is_instance_valid(target) and target.has_method("take_damage"):
 		var dist := global_position.distance_to(target.global_position)
 		if dist < ATTACK_RANGE + 0.5:
@@ -101,8 +101,8 @@ func take_damage(amount: int, knockback := false) -> void:
 
 
 func _on_damaged(_amount: int, _knockback: bool) -> void:
-	AudioManager.play_zombie_hit()
-	var fx := preload("res://src/zombie/effects/hit_fx.tscn").instantiate()
+	AudioManager.play_enemy_hit()
+	var fx := preload("res://src/enemy/effects/hit_fx.tscn").instantiate()
 	var parent: Node3D = get_parent() as Node3D
 	if not parent:
 		parent = get_tree().current_scene as Node3D
@@ -118,8 +118,8 @@ func _on_death() -> void:
 		collision_shape.disabled = true
 	var pos := global_position
 
-	AudioManager.play_zombie_death()
-	var fx := preload("res://src/zombie/effects/death_explosion.tscn").instantiate()
+	AudioManager.play_enemy_death()
+	var fx := preload("res://src/enemy/effects/death_explosion.tscn").instantiate()
 	var parent: Node3D = get_parent() as Node3D
 	if not parent:
 		parent = get_tree().current_scene as Node3D

@@ -18,9 +18,9 @@ func _generate_all_sounds() -> void:
 	_sounds["sword_slash"] = SoundGenerator.frequency_sweep(300.0, 100.0, 0.12, SoundGenerator.Waveform.TRIANGLE, -6.0)
 	_sounds["sword_slash_noise"] = SoundGenerator.noise_burst(0.05, -14.0)
 	_sounds["sword_hit"] = SoundGenerator.triangle_wave(120.0, 0.08, -8.0)
-	_sounds["zombie_hit"] = SoundGenerator.triangle_wave(180.0, 0.06, -8.0)
-	_sounds["zombie_death"] = SoundGenerator.frequency_sweep(120.0, 30.0, 0.15, SoundGenerator.Waveform.TRIANGLE, -10.0)
-	_sounds["zombie_attack"] = SoundGenerator.triangle_wave(55.0, 0.15, -10.0)
+	_sounds["enemy_hit"] = SoundGenerator.triangle_wave(180.0, 0.06, -8.0)
+	_sounds["enemy_death"] = SoundGenerator.frequency_sweep(120.0, 30.0, 0.15, SoundGenerator.Waveform.TRIANGLE, -10.0)
+	_sounds["enemy_attack"] = SoundGenerator.triangle_wave(55.0, 0.15, -10.0)
 	_sounds["collect"] = SoundGenerator.arpeggio([523.25, 659.25, 783.99, 1046.5], 0.06, SoundGenerator.Waveform.TRIANGLE, -6.0)
 	_sounds["arrow_hit"] = SoundGenerator.arpeggio([659.25, 783.99, 987.77], 0.03, SoundGenerator.Waveform.SINE, -12.0)
 	_sounds["player_hit"] = SoundGenerator.triangle_wave(130.0, 0.12, -8.0)
@@ -103,16 +103,16 @@ func play_sword_hit() -> void:
 	_play("sword_hit", 1.0, -4.0)
 
 
-func play_zombie_hit() -> void:
-	_play("zombie_hit", randf_range(0.9, 1.1), -4.0)
+func play_enemy_hit() -> void:
+	_play("enemy_hit", randf_range(0.9, 1.1), -4.0)
 
 
-func play_zombie_death() -> void:
-	_play("zombie_death", randf_range(0.85, 1.15), -2.0)
+func play_enemy_death() -> void:
+	_play("enemy_death", randf_range(0.85, 1.15), -2.0)
 
 
-func play_zombie_attack() -> void:
-	_play("zombie_attack", randf_range(0.9, 1.1), -4.0)
+func play_enemy_attack() -> void:
+	_play("enemy_attack", randf_range(0.9, 1.1), -4.0)
 
 
 func play_collect() -> void:

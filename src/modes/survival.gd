@@ -7,7 +7,7 @@ const EnvironmentNode = preload("res://src/world/environment.gd")
 const PlayerScene = preload("res://src/player/player.tscn")
 const UIScene = preload("res://src/ui/ui.tscn")
 const ArrowScript = preload("res://src/player/arrow.gd")
-const ZombieManager = preload("res://src/enemies/zombie_manager.gd")
+const EnemyManager = preload("res://src/enemies/enemy_manager.gd")
 const BiomeOverlayScene = preload("res://src/world/biome_overlay.gd")
 
 func _ready() -> void:
@@ -61,10 +61,10 @@ func _ready() -> void:
 	arrow_container.name = "Arrows"
 	add_child(arrow_container)
 
-	var zombie_mgr: Node = ZombieManager.new()
-	zombie_mgr.world_gen = world_gen
-	add_child(zombie_mgr)
-	zombie_mgr.zombie_killed.connect(_on_zombie_killed.bind(ui))
+	var enemy_mgr: Node = EnemyManager.new()
+	enemy_mgr.world_gen = world_gen
+	add_child(enemy_mgr)
+	enemy_mgr.enemy_killed.connect(_on_enemy_killed.bind(ui))
 
 	loading.update("Ready!", 1.0)
 	await get_tree().create_timer(0.2).timeout
@@ -83,7 +83,7 @@ func _on_arrow_fired(origin: Vector3, direction: Vector3, speed: float) -> void:
 	var arrow_container: Node3D = get_node("Arrows")
 	ArrowScript.spawn(arrow_container, origin, direction, speed)
 
-func _on_zombie_killed(pts: int, ui: CanvasLayer) -> void:
+func _on_enemy_killed(pts: int, ui: CanvasLayer) -> void:
 	score += pts
 	ui.set_score(score)
 

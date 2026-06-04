@@ -96,21 +96,34 @@ func _draw_dash_slash() -> void:
 	_draw_ability_slot(target, size)
 	_draw_keybind(target, size, "SHIFT")
 
-	# Sword icon
-	# Blade
-	target.draw_rect(Rect2(cx - 2.0, cy - 12.0, 4.0, 20.0), ICON_COLOR)
-	# Guard (crossguard)
-	target.draw_rect(Rect2(cx - 7.0, cy + 7.0, 14.0, 3.0), ICON_COLOR)
-	# Handle
-	target.draw_rect(Rect2(cx - 1.5, cy + 10.0, 3.0, 8.0), Color(0.6, 0.4, 0.2, 0.85))
-	# Dash arrow (rightward)
-	target.draw_rect(Rect2(cx + 8.0, cy - 2.0, 8.0, 3.0), ICON_COLOR)
-	var arrow_poly := PackedVector2Array([
-		Vector2(cx + 16.0, cy - 5.0),
-		Vector2(cx + 22.0, cy + 0.0),
-		Vector2(cx + 16.0, cy + 5.0),
-	])
-	target.draw_colored_polygon(arrow_poly, ICON_COLOR)
+	# Horizontal swipe icon — curved arc with motion trail
+	var segments := 16
+	var arc_w := 18.0
+	var arc_h := 6.0
+	var line_w := 3.0
+	var col := ICON_COLOR
+	# Draw curved arc from left to right, bowing upward
+	for i in segments:
+		var t1 := float(i) / float(segments)
+		var t2 := float(i + 1) / float(segments)
+		var x1 := cx - arc_w * 0.5 + arc_w * t1
+		var y1 := cy + sin(t1 * PI) * arc_h
+		var x2 := cx - arc_w * 0.5 + arc_w * t2
+		var y2 := cy + sin(t2 * PI) * arc_h
+		target.draw_line(Vector2(x1, y1), Vector2(x2, y2), col, line_w)
+	# Arrowhead at the right end
+	var tip_x := cx + arc_w * 0.5
+	var tip_y := cy
+	target.draw_colored_polygon(PackedVector2Array([
+		Vector2(tip_x, tip_y),
+		Vector2(tip_x - 6.0, tip_y - 4.0),
+		Vector2(tip_x - 6.0, tip_y + 4.0),
+	]), col)
+	# Subtle motion lines behind
+	for j in 3:
+		var lx := cx - arc_w * 0.3 + j * 4.0
+		var ly := cy + 2.0
+		target.draw_rect(Rect2(lx, ly, 3.0, 1.5), Color(1, 1, 1, 0.35))
 
 	# Cooldown overlay (descending curtain from top)
 	var player_cd: float = player.dash_cooldown if player else 0.0
