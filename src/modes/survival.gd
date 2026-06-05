@@ -124,6 +124,7 @@ func _spawn_player(spawn_pos: Vector3) -> CharacterBody3D:
 	player.set_multiplayer_authority(player_id)
 	add_child(player)
 	player.global_position = spawn_pos
+	player._spawn_position = spawn_pos
 	player.add_to_group("local_player")
 	player.add_to_group("player")
 	return player

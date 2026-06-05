@@ -107,8 +107,6 @@ func start_respawn() -> void:
 	spawn_collectible(pos)
 
 func _process(delta: float) -> void:
-	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
-		return
 	for c: Node in collectibles:
 		if is_instance_valid(c):
 			c.rotate_y(delta * 2.0)

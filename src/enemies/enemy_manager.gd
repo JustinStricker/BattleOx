@@ -126,7 +126,8 @@ func _try_spawn() -> void:
 		enemy.global_position = spawn_pos
 		enemies.append(enemy)
 		enemy.died.connect(_on_enemy_died.bind(enemy))
-		rpc("_spawn_enemy_replica", _enemy_spawn_index, spawn_pos, enemy.zombie_type.resource_path, enemy.skeleton.body_scale)
+		if multiplayer.multiplayer_peer != null:
+			rpc("_spawn_enemy_replica", _enemy_spawn_index, spawn_pos, enemy.zombie_type.resource_path, enemy.skeleton.body_scale)
 		_enemy_spawn_index += 1
 		return
 
@@ -151,7 +152,8 @@ func _spawn_enemy_replica(index: int, spawn_pos: Vector3, type_path: String, bod
 
 func _on_enemy_died(pos: Vector3, enemy: Enemy) -> void:
 	var idx := int(enemy.name.trim_prefix("Enemy_"))
-	rpc("_despawn_enemy_replica", idx)
+	if multiplayer.multiplayer_peer != null:
+		rpc("_despawn_enemy_replica", idx)
 	enemy_killed.emit(enemy.zombie_type.health)
 	_cleanup_dead()
 
@@ -162,5 +164,37 @@ func _despawn_enemy_replica(index: int) -> void:
 		return
 	var enemy := get_node_or_null("Enemy_%d" % index) as Enemy
 	if enemy:
+		var pos := enemy.global_position
+		if enemy.zombie_type:
+			var fx := preload("res://src/enemy/effects/death_explosion.tscn").instantiate()
+			fx.set_zombie_type(enemy.zombie_type)
+			add_child(fx)
+			fx.global_position = pos
+		AudioManager.play_enemy_death()
+		_shake_replica_camera(0.06, 0.35)
 		enemy.queue_free()
 		_cleanup_dead()
+
+
+func _shake_replica_camera(amount: float, duration: float) -> void:
+	var camera: Camera3D = get_viewport().get_camera_3d()
+	if not camera:
+		return
+	var orig_rot_x: float = camera.rotation.x
+	var orig_rot_y: float = camera.rotation.y
+	var tween: Tween = create_tween()
+	var elapsed: float = 0.0
+	tween.tween_method(func(_v: Variant):
+		elapsed += get_process_delta_time()
+		if not is_instance_valid(camera):
+			tween.kill()
+			return
+		var decay: float = max(1.0 - elapsed / duration, 0.0)
+		camera.rotation.x = orig_rot_x + randf_range(-amount, amount) * decay
+		camera.rotation.y = orig_rot_y + randf_range(-amount, amount) * decay
+	, 0.0, 1.0, duration)
+	tween.tween_callback(func():
+		if is_instance_valid(camera):
+			camera.rotation.x = orig_rot_x
+			camera.rotation.y = orig_rot_y
+	)

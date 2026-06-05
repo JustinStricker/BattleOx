@@ -20,12 +20,16 @@ const ATTACK_COOLDOWN: float = 1.2
 
 var _dead: bool = false
 var _prev_ai_state: int = -1
+var _target_pos: Vector3
+var _target_rot: Vector3
 
 
 func _ready() -> void:
 	add_to_group("enemy")
 	collision_layer = 2
 	up_direction = Vector3.UP
+	_target_pos = global_position
+	_target_rot = global_rotation
 	_pick_type_and_build()
 	ai.reset_timers()
 	_apply_type_to_ai()
@@ -80,6 +84,10 @@ func _resize_collision() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _replica and multiplayer.multiplayer_peer != null and not multiplayer.is_server():
+		global_position = global_position.lerp(_target_pos, 10.0 * delta)
+		global_rotation = global_rotation.lerp(_target_rot, 10.0 * delta)
+		return
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	if _dead:
@@ -91,7 +99,7 @@ func _physics_process(delta: float) -> void:
 
 	ai.process_ai(delta)
 
-	if Engine.get_process_frames() % 3 == 0:
+	if Engine.get_process_frames() % 3 == 0 and multiplayer.multiplayer_peer != null:
 		rpc("_sync_enemy_transform", global_position, global_rotation)
 
 	var st := ai.state
@@ -112,12 +120,17 @@ func _physics_process(delta: float) -> void:
 func _sync_enemy_transform(pos: Vector3, rot: Vector3) -> void:
 	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		return
-	global_position = pos
-	global_rotation = rot
+	if not _replica:
+		global_position = pos
+		global_rotation = rot
+	_target_pos = pos
+	_target_rot = rot
 
 
 func _on_ai_attack(target: Node3D, damage: int) -> void:
 	AudioManager.play_enemy_attack()
+	if multiplayer.multiplayer_peer != null:
+		rpc("_attack_fx")
 	if is_instance_valid(target) and target.has_method("take_damage"):
 		var dist := global_position.distance_to(target.global_position)
 		if dist < ATTACK_RANGE + 0.5:
@@ -138,6 +151,26 @@ func _take_damage_rpc(amount: int, knockback: bool) -> void:
 	health.take_damage(amount, knockback)
 
 
+@rpc("authority", "unreliable")
+func _hit_fx(pos: Vector3) -> void:
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
+		return
+	var fx := preload("res://src/enemy/effects/hit_fx.tscn").instantiate()
+	var parent: Node3D = get_parent() as Node3D
+	if not parent:
+		parent = get_tree().current_scene as Node3D
+	parent.add_child(fx)
+	fx.global_position = pos + Vector3.UP * 0.5
+	AudioManager.play_enemy_hit()
+
+
+@rpc("authority", "unreliable")
+func _attack_fx() -> void:
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
+		return
+	AudioManager.play_enemy_attack()
+
+
 func _on_damaged(_amount: int, _knockback: bool) -> void:
 	AudioManager.play_enemy_hit()
 	var fx := preload("res://src/enemy/effects/hit_fx.tscn").instantiate()
@@ -146,6 +179,8 @@ func _on_damaged(_amount: int, _knockback: bool) -> void:
 		parent = get_tree().current_scene as Node3D
 	parent.add_child(fx)
 	fx.global_position = global_position + Vector3.UP * 0.5
+	if multiplayer.multiplayer_peer != null:
+		rpc("_hit_fx", global_position)
 
 
 func _on_death() -> void:

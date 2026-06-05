@@ -40,9 +40,17 @@ func try_fire() -> bool:
 	cooldown = COOLDOWN_DURATION
 	charge_changed.emit(charge)
 
-	_spawn_projectile()
-
 	var camera := get_parent() as Camera3D
+	var origin := camera.global_position
+	var direction := -camera.global_transform.basis.z
+
+	if multiplayer.multiplayer_peer == null:
+		_spawn_projectile_at(origin, direction.normalized())
+	elif multiplayer.is_server():
+		rpc("_spawn_ultimate_projectile", origin, direction.normalized())
+	else:
+		rpc_id(1, "_request_ultimate", origin, direction.normalized())
+
 	var bow := camera.get_node_or_null("Bow") as Node3D
 	if bow:
 		bow.cancel_charge()
@@ -63,14 +71,22 @@ func try_fire() -> bool:
 	return true
 
 
-func _spawn_projectile() -> void:
-	var camera := get_parent() as Camera3D
-	var origin := camera.global_position
-	var direction := -camera.global_transform.basis.z
+@rpc("any_peer", "reliable")
+func _request_ultimate(origin: Vector3, direction: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	rpc("_spawn_ultimate_projectile", origin, direction)
 
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_ultimate_projectile(origin: Vector3, direction: Vector3) -> void:
+	_spawn_projectile_at(origin, direction)
+
+
+func _spawn_projectile_at(origin: Vector3, direction: Vector3) -> void:
 	var projectile := Node3D.new()
 	projectile.set_script(ProjectileScript)
-	projectile.setup(origin, direction.normalized())
+	projectile.setup(origin, direction)
 	get_tree().current_scene.add_child(projectile)
 
 

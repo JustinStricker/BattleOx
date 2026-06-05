@@ -158,6 +158,9 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 	var z_damage := 25
 	arrow.body_entered.connect(func(body: Node):
 		if not authoritative:
+			AudioManager.play_arrow_hit()
+			trail.emitting = false
+			arrow.queue_free()
 			return
 		if body.is_in_group("enemy"):
 			if body.has_method("take_damage"):

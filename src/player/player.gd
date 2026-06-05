@@ -4,6 +4,7 @@ signal jump_charge_changed(charge: float)
 signal jump_launched(charge: float)
 signal jump_landed()
 signal roll_charges_changed(charges: int, recharging: bool, progress: float)
+signal health_changed(current: int, max_hp: int)
 
 @onready var camera_node: Camera3D = $Camera3D
 var health: int = 100
@@ -221,28 +222,27 @@ func _input(event: InputEvent) -> void:
 
 
 func take_damage(amount: int) -> void:
-	if _is_remote:
-		return
 	if invincible_timer > 0.0:
 		return
 	health -= amount
+	health_changed.emit(health, max_health)
 	invincible_timer = 0.5
-	AudioManager.play_player_hit()
+	if not _is_remote:
+		AudioManager.play_player_hit()
+	if _is_remote:
+		rpc_id(get_multiplayer_authority(), "_sync_health", health)
 	if health <= 0:
-		if multiplayer.multiplayer_peer == null or multiplayer.is_server():
+		if multiplayer.multiplayer_peer == null:
+			_die()
+			_respawn_after_delay()
+		elif multiplayer.is_server():
 			rpc("_die")
+			_respawn_after_delay()
 		else:
 			rpc_id(1, "request_die")
 
 
-func _on_take_damage_rpc(amount: int) -> void:
-	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
-		return
-	health -= amount
-	if health <= 0:
-		rpc("_die")
-
-
+@rpc("any_peer", "reliable")
 func request_die() -> void:
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
@@ -254,16 +254,40 @@ func _die() -> void:
 	if _is_remote:
 		return
 	health = 0
+	health_changed.emit(health, max_health)
 	AudioManager.play_player_death()
+
+
+func _respawn_after_delay() -> void:
 	await get_tree().create_timer(0.5).timeout
-	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
-		_respawn()
+	if not is_instance_valid(self):
+		return
+	_respawn()
+	if _is_remote:
+		rpc_id(get_multiplayer_authority(), "_respawn_client", _spawn_position)
+
+
+@rpc("authority", "reliable")
+func _sync_health(hp: int) -> void:
+	health = hp
+	health_changed.emit(health, max_health)
+
+
+@rpc("authority", "reliable")
+func _respawn_client(pos: Vector3) -> void:
+	global_position = pos
+	health = max_health
+	health_changed.emit(health, max_health)
+	invincible_timer = 2.0
+	velocity = Vector3.ZERO
 
 
 func _respawn() -> void:
 	health = max_health
+	health_changed.emit(health, max_health)
 	invincible_timer = 2.0
-	global_position = _spawn_position
+	if _spawn_position != Vector3():
+		global_position = _spawn_position
 	velocity = Vector3.ZERO
 
 
