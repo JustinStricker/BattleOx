@@ -57,8 +57,8 @@ func _on_start_pressed() -> void:
 	start_button.disabled = true
 	NetworkManager.connection_failed.disconnect(_on_connection_failed)
 	NetworkManager.connection_failed.connect(_on_connection_failed)
-	_start_game()
 	NetworkManager.join_game(ip)
+	_start_game()
 
 
 func _on_quit_pressed() -> void:

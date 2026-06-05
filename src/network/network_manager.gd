@@ -7,14 +7,16 @@ signal connection_failed()
 
 const DEFAULT_PORT: int = 23456
 
+var _is_host: bool = false
+
 var local_player_id: int:
-	get: return multiplayer.get_unique_id()
+	get: return multiplayer.get_unique_id() if multiplayer.multiplayer_peer != null else 1
 
 var is_host: bool:
-	get: return multiplayer.is_server()
+	get: return _is_host
 
 var is_client: bool:
-	get: return not multiplayer.is_server()
+	get: return not _is_host
 
 var peer: ENetMultiplayerPeer
 
@@ -34,6 +36,7 @@ func host_game(port: int = DEFAULT_PORT) -> void:
 		push_error("Failed to create server: %d" % err)
 		return
 	multiplayer.multiplayer_peer = peer
+	_is_host = true
 
 
 func join_game(ip: String, port: int = DEFAULT_PORT) -> void:
@@ -44,10 +47,12 @@ func join_game(ip: String, port: int = DEFAULT_PORT) -> void:
 		connection_failed.emit()
 		return
 	multiplayer.multiplayer_peer = peer
+	_is_host = false
 
 
 func leave_game() -> void:
 	multiplayer.multiplayer_peer = null
+	_is_host = false
 	if peer:
 		peer.close()
 		peer = null

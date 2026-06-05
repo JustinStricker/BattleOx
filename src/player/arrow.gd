@@ -25,7 +25,7 @@ static func _init_materials() -> void:
 	_nock_mat.albedo_color = Color(0.2, 0.15, 0.1)
 	_nock_mat.roughness = 0.8
 
-static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: float) -> void:
+static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: float, authoritative: bool = true) -> void:
 	_init_materials()
 	var arrow: RigidBody3D = RigidBody3D.new()
 	arrow.set_script(preload("res://src/player/arrow_body.gd"))
@@ -157,6 +157,8 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 
 	var z_damage := 25
 	arrow.body_entered.connect(func(body: Node):
+		if not authoritative:
+			return
 		if body.is_in_group("enemy"):
 			if body.has_method("take_damage"):
 				body.take_damage(z_damage, true)

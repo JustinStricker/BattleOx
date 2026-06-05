@@ -55,7 +55,7 @@ func spawn_collectible(pos: Vector3) -> void:
 	collectible.body_entered.connect(_on_collect.bind(collectible))
 
 func _on_collect(body: Node3D, item: Area3D) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	if body.is_in_group("player") or (body is RigidBody3D and body.is_in_group("arrow")):
 		AudioManager.play_collect()
@@ -70,7 +70,7 @@ func _on_collect(body: Node3D, item: Area3D) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _on_collect_rpc(item_path: NodePath) -> void:
-	if multiplayer.is_server():
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		return
 	var item := get_node_or_null(item_path) as Area3D
 	if item:
@@ -107,7 +107,7 @@ func start_respawn() -> void:
 	spawn_collectible(pos)
 
 func _process(delta: float) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	for c: Node in collectibles:
 		if is_instance_valid(c):

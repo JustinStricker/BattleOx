@@ -22,6 +22,12 @@ AudioManager="*res://src/audio/audio_manager.gd"
 MusicManager="*res://src/audio/music_manager.gd"
 NetworkManager="*res://src/network/network_manager.gd"
 
+[debug]
+
+file_logging/enable_file_logging=true
+file_logging/log_path="/Users/justin/demo/godot.log"
+file_logging/max_log_files=1
+
 [display]
 
 window/size/viewport_width=2560

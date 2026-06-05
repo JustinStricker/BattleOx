@@ -65,7 +65,7 @@ func _ready() -> void:
 	collision_mask = 1 | 2
 	_saved_mask = collision_mask
 
-	_is_remote = get_multiplayer_authority() != multiplayer.get_unique_id()
+	_is_remote = multiplayer.multiplayer_peer != null and get_multiplayer_authority() != multiplayer.get_unique_id()
 	if _is_remote:
 		if camera_node:
 			camera_node.current = false
@@ -229,14 +229,14 @@ func take_damage(amount: int) -> void:
 	invincible_timer = 0.5
 	AudioManager.play_player_hit()
 	if health <= 0:
-		if multiplayer.is_server():
+		if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 			rpc("_die")
 		else:
 			rpc_id(1, "request_die")
 
 
 func _on_take_damage_rpc(amount: int) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	health -= amount
 	if health <= 0:
@@ -244,7 +244,7 @@ func _on_take_damage_rpc(amount: int) -> void:
 
 
 func request_die() -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	rpc("_die")
 
@@ -256,7 +256,7 @@ func _die() -> void:
 	health = 0
 	AudioManager.play_player_death()
 	await get_tree().create_timer(0.5).timeout
-	if multiplayer.is_server():
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		_respawn()
 
 
@@ -505,6 +505,8 @@ func _process(delta: float) -> void:
 
 
 func _send_transform_sync() -> void:
+	if not multiplayer.multiplayer_peer:
+		return
 	if Engine.get_process_frames() % 3 != 0:
 		return
 	if multiplayer.is_server():
@@ -515,7 +517,7 @@ func _send_transform_sync() -> void:
 
 @rpc("any_peer", "unreliable", "call_local")
 func _report_transform(pos: Vector3, rot: Vector3) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	rpc("_sync_transform", pos, rot)
 

@@ -32,7 +32,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	_cleanup_dead()
 	spawn_timer -= delta
@@ -133,7 +133,7 @@ func _try_spawn() -> void:
 
 @rpc("authority", "reliable")
 func _spawn_enemy_replica(index: int, spawn_pos: Vector3, type_path: String, body_scale: float) -> void:
-	if multiplayer.is_server():
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		return
 	if get_node_or_null("Enemy_%d" % index):
 		return
@@ -150,5 +150,17 @@ func _spawn_enemy_replica(index: int, spawn_pos: Vector3, type_path: String, bod
 
 
 func _on_enemy_died(pos: Vector3, enemy: Enemy) -> void:
+	var idx := int(enemy.name.trim_prefix("Enemy_"))
+	rpc("_despawn_enemy_replica", idx)
 	enemy_killed.emit(enemy.zombie_type.health)
 	_cleanup_dead()
+
+
+@rpc("authority", "reliable")
+func _despawn_enemy_replica(index: int) -> void:
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
+		return
+	var enemy := get_node_or_null("Enemy_%d" % index) as Enemy
+	if enemy:
+		enemy.queue_free()
+		_cleanup_dead()

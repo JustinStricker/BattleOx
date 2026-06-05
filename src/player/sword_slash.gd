@@ -35,7 +35,7 @@ func start_slash() -> bool:
 	slash_cooldown = SLASH_COOLDOWN
 	is_slashing = true
 	_play_slash_animation()
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		var player := _get_player()
 		if player:
 			var cam := player.get_node_or_null("Camera3D") as Camera3D
@@ -48,7 +48,7 @@ func start_slash() -> bool:
 
 @rpc("any_peer", "call_local", "reliable")
 func _request_slash_rpc(origin: Vector3, forward: Vector3) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	_perform_slash_hit_at(origin, forward.normalized())
 
@@ -206,7 +206,7 @@ func _build_sword_mesh() -> void:
 
 
 func _perform_slash_hit() -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
 	if not player:

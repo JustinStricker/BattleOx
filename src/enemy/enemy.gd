@@ -80,7 +80,7 @@ func _resize_collision() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	if _dead:
 		return
@@ -110,7 +110,7 @@ func _physics_process(delta: float) -> void:
 
 @rpc("authority", "unreliable")
 func _sync_enemy_transform(pos: Vector3, rot: Vector3) -> void:
-	if multiplayer.is_server():
+	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		return
 	global_position = pos
 	global_rotation = rot
@@ -125,7 +125,7 @@ func _on_ai_attack(target: Node3D, damage: int) -> void:
 
 
 func take_damage(amount: int, knockback := false) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		rpc("_take_damage_rpc", amount, knockback)
 		return
 	health.take_damage(amount, knockback)
@@ -133,7 +133,7 @@ func take_damage(amount: int, knockback := false) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _take_damage_rpc(amount: int, knockback: bool) -> void:
-	if not multiplayer.is_server():
+	if multiplayer.multiplayer_peer == null or not multiplayer.is_server():
 		return
 	health.take_damage(amount, knockback)
 

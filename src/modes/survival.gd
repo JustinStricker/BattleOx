@@ -20,6 +20,9 @@ const BiomeOverlayScene = preload("res://src/world/biome_overlay.gd")
 
 
 func _ready() -> void:
+	if multiplayer.multiplayer_peer == null:
+		_client_setup()
+		return
 	if NetworkManager.is_host:
 		_host_setup()
 	else:
@@ -116,8 +119,9 @@ func _find_spawn_position() -> Vector3:
 
 func _spawn_player(spawn_pos: Vector3) -> CharacterBody3D:
 	var player := PlayerScene.instantiate()
-	player.name = "Player_%d" % multiplayer.get_unique_id()
-	player.set_multiplayer_authority(multiplayer.get_unique_id())
+	var player_id := multiplayer.get_unique_id() if multiplayer.multiplayer_peer != null else 1
+	player.name = "Player_%d" % player_id
+	player.set_multiplayer_authority(player_id)
 	add_child(player)
 	player.global_position = spawn_pos
 	player.add_to_group("local_player")
@@ -207,6 +211,12 @@ func _on_host_player_connected(id: int) -> void:
 		if pid != id:
 			rpc_id(id, "spawn_remote_player", pid, p.global_position)
 
+	for enemy in enemy_mgr.enemies:
+		if not is_instance_valid(enemy):
+			continue
+		var idx := int(enemy.name.trim_prefix("Enemy_"))
+		enemy_mgr.rpc_id(id, "_spawn_enemy_replica", idx, enemy.global_position, enemy.zombie_type.resource_path, enemy.skeleton.body_scale)
+
 
 func _on_host_arrow_fired(origin: Vector3, direction: Vector3, speed: float) -> void:
 	rpc("spawn_arrow", origin, direction, speed)
@@ -225,7 +235,8 @@ func request_arrow(origin: Vector3, direction: Vector3, speed: float) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func spawn_arrow(origin: Vector3, direction: Vector3, speed: float) -> void:
-	ArrowScript.spawn(arrow_container, origin, direction, speed)
+	var authoritative := multiplayer.multiplayer_peer == null or multiplayer.is_server()
+	ArrowScript.spawn(arrow_container, origin, direction, speed, authoritative)
 
 
 func _on_enemy_killed(pts: int, ui: CanvasLayer) -> void:
