@@ -20,6 +20,7 @@ var min_spawn_dist: float = 16.0
 var max_spawn_dist: float = 60.0
 
 var enemies: Array[Enemy] = []
+var _enemy_spawn_index: int = 0
 
 var _raycast_cache: Dictionary = {}
 var _raycast_cache_times: Dictionary = {}
@@ -31,6 +32,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
 	_cleanup_dead()
 	spawn_timer -= delta
 	if spawn_timer <= 0.0:
@@ -117,11 +120,33 @@ func _try_spawn() -> void:
 			continue
 
 		var enemy: Enemy = EnemyScene.instantiate() as Enemy
+		enemy.name = "Enemy_%d" % _enemy_spawn_index
 		add_child(enemy)
-		enemy.global_position = Vector3(sx, h + 15.0, sz)
+		var spawn_pos := Vector3(sx, h + 15.0, sz)
+		enemy.global_position = spawn_pos
 		enemies.append(enemy)
 		enemy.died.connect(_on_enemy_died.bind(enemy))
+		rpc("_spawn_enemy_replica", _enemy_spawn_index, spawn_pos, enemy.zombie_type.resource_path, enemy.skeleton.body_scale)
+		_enemy_spawn_index += 1
 		return
+
+
+@rpc("authority", "reliable")
+func _spawn_enemy_replica(index: int, spawn_pos: Vector3, type_path: String, body_scale: float) -> void:
+	if multiplayer.is_server():
+		return
+	if get_node_or_null("Enemy_%d" % index):
+		return
+	var enemy := EnemyScene.instantiate() as Enemy
+	enemy.name = "Enemy_%d" % index
+	enemy.zombie_type = load(type_path)
+	enemy._replica = true
+	enemy.set_meta("replica_body_scale", body_scale)
+	add_child(enemy)
+	enemy.skeleton.body_scale = body_scale
+	enemy.global_position = spawn_pos
+	enemy.collision_shape.disabled = true
+	enemies.append(enemy)
 
 
 func _on_enemy_died(pos: Vector3, enemy: Enemy) -> void:

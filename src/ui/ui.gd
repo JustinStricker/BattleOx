@@ -39,7 +39,9 @@ func _ready() -> void:
 	roll_ability.draw.connect(_draw_roll)
 	ultimate_ability.draw.connect(_draw_ultimate)
 
-	player = get_tree().get_first_node_in_group("player")
+	player = get_tree().get_first_node_in_group("local_player")
+	if not player:
+		player = get_tree().get_first_node_in_group("player")
 	if player:
 		var cam: Node3D = player.get_node("Camera3D")
 		if cam:

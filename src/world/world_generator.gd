@@ -14,8 +14,8 @@ var _forest_noise: FastNoiseLite
 
 var _vegetation_blockers: Array[Rect2] = []
 
-func _init() -> void:
-	seed_value = randi()
+func _init(p_seed: int = -1) -> void:
+	seed_value = p_seed if p_seed >= 0 else randi()
 	_height_noise = _make_noise(0, 0.008, 5, 2.0, 0.5)
 	_moisture_noise = _make_noise(1, 0.012, 3, 1.5, 0.5)
 	_temperature_noise = _make_noise(2, 0.01, 3, 1.5, 0.5)

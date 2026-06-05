@@ -11,7 +11,23 @@ var _cached_result: bool = false
 
 
 func _ready() -> void:
-	target = get_tree().get_first_node_in_group(target_group) as Node3D
+	_find_nearest_target()
+
+
+func _find_nearest_target() -> void:
+	var players := get_tree().get_nodes_in_group(target_group)
+	var nearest: Node3D = null
+	var nearest_dist := INF
+	var owner_pos := (owner as Node3D).global_position
+	for p in players:
+		var p3 := p as Node3D
+		if not is_instance_valid(p3):
+			continue
+		var d := owner_pos.distance_squared_to(p3.global_position)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest = p3
+	target = nearest
 
 
 func has_line_of_sight() -> bool:
@@ -21,7 +37,7 @@ func has_line_of_sight() -> bool:
 	_checked_frame = frame
 
 	if not is_instance_valid(target):
-		target = get_tree().get_first_node_in_group(target_group) as Node3D
+		_find_nearest_target()
 		_cached_result = false
 		return false
 

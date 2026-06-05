@@ -55,15 +55,28 @@ func spawn_collectible(pos: Vector3) -> void:
 	collectible.body_entered.connect(_on_collect.bind(collectible))
 
 func _on_collect(body: Node3D, item: Area3D) -> void:
+	if not multiplayer.is_server():
+		return
 	if body.is_in_group("player") or (body is RigidBody3D and body.is_in_group("arrow")):
 		AudioManager.play_collect()
-		item.queue_free()
+		rpc("_on_collect_rpc", item.get_path())
 		score_changed.emit(10)
 		if body is RigidBody3D and body.is_in_group("arrow"):
 			create_impact_particles(body.global_position)
 			body.queue_free()
 		collectibles.erase(item)
 		start_respawn()
+
+
+@rpc("authority", "call_local", "reliable")
+func _on_collect_rpc(item_path: NodePath) -> void:
+	if multiplayer.is_server():
+		return
+	var item := get_node_or_null(item_path) as Area3D
+	if item:
+		AudioManager.play_collect()
+		item.queue_free()
+	score_changed.emit(10)
 
 func create_impact_particles(pos: Vector3) -> void:
 	var particles: GPUParticles3D = GPUParticles3D.new()
@@ -94,6 +107,8 @@ func start_respawn() -> void:
 	spawn_collectible(pos)
 
 func _process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
 	for c: Node in collectibles:
 		if is_instance_valid(c):
 			c.rotate_y(delta * 2.0)

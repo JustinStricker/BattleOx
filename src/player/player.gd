@@ -9,6 +9,8 @@ signal roll_charges_changed(charges: int, recharging: bool, progress: float)
 var health: int = 100
 var max_health: int = 100
 var invincible_timer: float = 0.0
+var _spawn_position: Vector3
+var _is_remote: bool = false
 
 const SPEED: float = 5.0
 const DOUBLE_TAP_TIME: float = 0.3
@@ -54,11 +56,23 @@ var _blink_particles: GPUParticles3D
 var _blink_start_pos: Vector3
 
 var _camera_bob_offset: float = 0.0
+var _anim_time: float = 0.0
+var _last_positions: Array[Vector3] = []
+
 
 func _ready() -> void:
 	add_to_group("player")
 	collision_mask = 1 | 2
 	_saved_mask = collision_mask
+
+	_is_remote = get_multiplayer_authority() != multiplayer.get_unique_id()
+	if _is_remote:
+		if camera_node:
+			camera_node.current = false
+			camera_node.remove_from_group("cameras")
+		_show_character_mesh(true)
+		return
+
 	roll_charges_changed.emit(roll_charges, false, 0.0)
 	_setup_blink_effects()
 	jump_launched.connect(_on_jump_launched)
@@ -74,6 +88,17 @@ func _ready() -> void:
 		jump_charge_changed.connect(wings.set_charge)
 		jump_launched.connect(wings.launch)
 		jump_landed.connect(wings.land)
+
+
+func _show_character_mesh(show: bool) -> void:
+	var torso := get_node_or_null("Torso")
+	var head := get_node_or_null("Head")
+	var el := get_node_or_null("LeftEye")
+	var er := get_node_or_null("RightEye")
+	for part in [torso, head, el, er]:
+		if part:
+			part.visible = show
+
 
 func _setup_blink_effects() -> void:
 	_blink_trail_mat = StandardMaterial3D.new()
@@ -149,6 +174,8 @@ func _setup_blink_effects() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _is_remote:
+		return
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		var mouse_event: InputEventMouseMotion = event as InputEventMouseMotion
 		rotate_y(-mouse_event.relative.x * 0.002)
@@ -192,33 +219,72 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_released("jump"):
 		_jump_held = false
 
+
 func take_damage(amount: int) -> void:
+	if _is_remote:
+		return
 	if invincible_timer > 0.0:
 		return
 	health -= amount
 	invincible_timer = 0.5
 	AudioManager.play_player_hit()
 	if health <= 0:
-		die()
+		if multiplayer.is_server():
+			rpc("_die")
+		else:
+			rpc_id(1, "request_die")
 
-func die() -> void:
+
+func _on_take_damage_rpc(amount: int) -> void:
+	if not multiplayer.is_server():
+		return
+	health -= amount
+	if health <= 0:
+		rpc("_die")
+
+
+func request_die() -> void:
+	if not multiplayer.is_server():
+		return
+	rpc("_die")
+
+
+@rpc("authority", "call_local", "reliable")
+func _die() -> void:
+	if _is_remote:
+		return
 	health = 0
 	AudioManager.play_player_death()
 	await get_tree().create_timer(0.5).timeout
-	get_tree().reload_current_scene()
+	if multiplayer.is_server():
+		_respawn()
+
+
+func _respawn() -> void:
+	health = max_health
+	invincible_timer = 2.0
+	global_position = _spawn_position
+	velocity = Vector3.ZERO
+
 
 func _on_slash_started() -> void:
+	if _is_remote:
+		return
 	var bow = get_node_or_null("Camera3D/Bow")
 	if bow:
 		bow.cancel_charge()
 		bow.visible = false
 
 func _on_slash_completed() -> void:
+	if _is_remote:
+		return
 	var bow = get_node_or_null("Camera3D/Bow")
 	if bow:
 		bow.visible = true
 
 func _start_dash_slash() -> void:
+	if _is_remote:
+		return
 	if dash_cooldown > 0.0 or is_dashing:
 		return
 	if slash_ability == null or not slash_ability.can_slash():
@@ -243,6 +309,8 @@ func _is_double_tap(now: float, last_press: float) -> bool:
 	return now - last_press <= DOUBLE_TAP_TIME and now - last_press > 0.0 and not is_rolling and not is_dashing and roll_charges > 0
 
 func _start_roll(direction: Vector3) -> void:
+	if _is_remote:
+		return
 	if roll_charges <= 0 or is_rolling or is_dashing:
 		return
 
@@ -282,13 +350,13 @@ func _start_roll(direction: Vector3) -> void:
 	fov_tween.tween_property(camera_node, "fov", _original_fov, 0.2).set_ease(Tween.EASE_IN)
 
 func _on_jump_launched(charge: float) -> void:
+	if _is_remote:
+		return
 	AudioManager.play_jump(charge)
-	# FOV punch
 	var fov_tween := create_tween()
 	fov_tween.tween_property(camera_node, "fov", _original_fov + 5.0 + charge * 5.0, 0.05).set_ease(Tween.EASE_OUT)
 	fov_tween.tween_property(camera_node, "fov", _original_fov, 0.3).set_ease(Tween.EASE_IN)
 
-	# Camera bob
 	_camera_bob_offset = -0.08 - charge * 0.06
 	var bob_tween := create_tween()
 	bob_tween.set_trans(Tween.TRANS_SPRING)
@@ -296,6 +364,8 @@ func _on_jump_launched(charge: float) -> void:
 	bob_tween.tween_property(self, "_camera_bob_offset", 0.0, 0.4)
 
 func _physics_process(delta: float) -> void:
+	if _is_remote:
+		return
 	invincible_timer = max(invincible_timer - delta, 0.0)
 	dash_cooldown = max(dash_cooldown - delta, 0.0)
 
@@ -395,3 +465,64 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	camera_node.position.y = 1.5 + _camera_bob_offset
+
+	_send_transform_sync()
+
+
+func _process(delta: float) -> void:
+	if not _is_remote:
+		return
+	_anim_time += delta
+
+	_last_positions.append(global_position)
+	if _last_positions.size() > 5:
+		_last_positions.pop_front()
+
+	var moved := false
+	if _last_positions.size() >= 2:
+		var total := 0.0
+		for i in range(1, _last_positions.size()):
+			total += _last_positions[i].distance_to(_last_positions[i - 1])
+		moved = total > 0.05
+
+	var torso := get_node_or_null("Torso") as MeshInstance3D
+	var head := get_node_or_null("Head") as MeshInstance3D
+	if not torso or not head:
+		return
+
+	if moved:
+		var sway := sin(_anim_time * 10.0) * 0.04
+		torso.position.x = sway
+		torso.position.y = -0.4 + abs(sin(_anim_time * 6.0)) * 0.015
+		head.position.x = -sway * 0.3
+		head.position.y = 0.45 + abs(sin(_anim_time * 6.0 + 1.0)) * 0.01
+	else:
+		var breath := sin(_anim_time * 2.5) * 0.025
+		torso.position.x = 0.0
+		torso.position.y = -0.4 + breath
+		head.position.x = 0.0
+		head.position.y = 0.45 - breath * 0.4
+
+
+func _send_transform_sync() -> void:
+	if Engine.get_process_frames() % 3 != 0:
+		return
+	if multiplayer.is_server():
+		rpc("_sync_transform", global_position, global_rotation)
+	else:
+		rpc_id(1, "_report_transform", global_position, global_rotation)
+
+
+@rpc("any_peer", "unreliable", "call_local")
+func _report_transform(pos: Vector3, rot: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	rpc("_sync_transform", pos, rot)
+
+
+@rpc("any_peer", "unreliable", "call_local")
+func _sync_transform(pos: Vector3, rot: Vector3) -> void:
+	if not _is_remote:
+		return
+	global_position = pos
+	global_rotation = rot

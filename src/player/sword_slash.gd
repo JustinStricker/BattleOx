@@ -35,7 +35,26 @@ func start_slash() -> bool:
 	slash_cooldown = SLASH_COOLDOWN
 	is_slashing = true
 	_play_slash_animation()
+	if not multiplayer.is_server():
+		var player := _get_player()
+		if player:
+			var cam := player.get_node_or_null("Camera3D") as Camera3D
+			if cam:
+				var origin := cam.global_position
+				var forward := -cam.global_transform.basis.z
+				rpc("_request_slash_rpc", origin, forward.normalized())
 	return true
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _request_slash_rpc(origin: Vector3, forward: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	_perform_slash_hit_at(origin, forward.normalized())
+
+
+func _get_player() -> CharacterBody3D:
+	return get_tree().get_first_node_in_group("local_player") as CharacterBody3D
 
 func can_slash() -> bool:
 	return slash_cooldown <= 0.0 and not is_slashing
@@ -187,6 +206,19 @@ func _build_sword_mesh() -> void:
 
 
 func _perform_slash_hit() -> void:
+	if not multiplayer.is_server():
+		return
+	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
+	if not player:
+		return
+	var cam := player.get_node_or_null("Camera3D") as Camera3D
+	if not cam:
+		return
+	var forward := -cam.global_transform.basis.z
+	_perform_slash_hit_at(cam.global_position, forward.normalized())
+
+
+func _perform_slash_hit_at(origin: Vector3, forward: Vector3) -> void:
 	var player: CharacterBody3D = get_tree().get_first_node_in_group("player") as CharacterBody3D
 	if not player:
 		return
@@ -195,11 +227,6 @@ func _perform_slash_hit() -> void:
 	if not space_state:
 		return
 
-	var forward: Vector3 = -get_parent().global_transform.basis.z
-	if forward.length_squared() < 0.001:
-		forward = -player.global_transform.basis.z
-	forward = forward.normalized()
-
 	var up := Vector3.UP
 	if abs(forward.dot(up)) > 0.99:
 		up = Vector3.RIGHT
@@ -207,7 +234,7 @@ func _perform_slash_hit() -> void:
 	var box := BoxShape3D.new()
 	box.size = Vector3(DASH_PATH_WIDTH, DASH_PATH_HEIGHT, DASH_PATH_DEPTH)
 
-	var box_center: Vector3 = player.global_position + forward * DASH_PATH_DEPTH * 0.5
+	var box_center: Vector3 = origin + forward * DASH_PATH_DEPTH * 0.5
 	box_center += up * DASH_PATH_HEIGHT * 0.5
 
 	var box_transform := Transform3D.IDENTITY

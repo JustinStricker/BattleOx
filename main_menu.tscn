@@ -39,10 +39,39 @@ theme_overrides/colors/font_color = Color(0.5, 0.85, 1.0, 1.0)
 [node name="Spacer" type="Control" parent="VBoxContainer"]
 custom_minimum_size = Vector2(0, 40)
 
-[node name="PlayButton" type="Button" parent="VBoxContainer"]
-text = "PLAY"
+[node name="HostButton" type="Button" parent="VBoxContainer"]
+text = "HOST GAME"
 custom_minimum_size = Vector2(200, 50)
 theme_overrides/font_sizes/font_size = 28
+
+[node name="JoinButton" type="Button" parent="VBoxContainer"]
+text = "JOIN GAME"
+custom_minimum_size = Vector2(200, 50)
+theme_overrides/font_sizes/font_size = 28
+
+[node name="IpLabel" type="Label" parent="VBoxContainer"]
+text = "Host IP Address:"
+visible = false
+horizontal_alignment = 1
+theme_overrides/font_sizes/font_size = 18
+
+[node name="IpInput" type="LineEdit" parent="VBoxContainer"]
+visible = false
+placeholder_text = "192.168.1.100"
+custom_minimum_size = Vector2(200, 40)
+theme_overrides/font_sizes/font_size = 20
+
+[node name="StartButton" type="Button" parent="VBoxContainer"]
+text = "CONNECT"
+visible = false
+custom_minimum_size = Vector2(200, 40)
+theme_overrides/font_sizes/font_size = 22
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer"]
+text = ""
+horizontal_alignment = 1
+theme_overrides/font_sizes/font_size = 16
+theme_overrides/colors/font_color = Color(0.7, 0.7, 0.7, 1.0)
 
 [node name="QuitButton" type="Button" parent="VBoxContainer"]
 text = "QUIT"

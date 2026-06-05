@@ -36,7 +36,22 @@ func _ready() -> void:
 	ai.despawned.connect(_cleanup)
 
 
+var _replica: bool = false
+
+
 func _pick_type_and_build() -> void:
+	if zombie_type != null:
+		var scale_val: float
+		if _replica:
+			scale_val = get_meta("replica_body_scale", zombie_type.body_scale_min)
+		else:
+			scale_val = randf_range(zombie_type.body_scale_min, zombie_type.body_scale_max)
+		skeleton.body_scale = scale_val
+		skeleton.build(zombie_type, scale_val)
+		health.max_health = zombie_type.health
+		health.current_health = zombie_type.health
+		health.invulnerability_time = 0.0
+		return
 	var zm := get_parent()
 	if zm and zm.has_method("roll_zombie_type"):
 		zombie_type = zm.roll_zombie_type()
@@ -65,6 +80,8 @@ func _resize_collision() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
 	if _dead:
 		return
 
@@ -73,6 +90,9 @@ func _physics_process(delta: float) -> void:
 		return
 
 	ai.process_ai(delta)
+
+	if Engine.get_process_frames() % 3 == 0:
+		rpc("_sync_enemy_transform", global_position, global_rotation)
 
 	var st := ai.state
 	var is_moving := st == AIStateMachine.State.WANDER or st == AIStateMachine.State.CHASE
@@ -88,6 +108,14 @@ func _physics_process(delta: float) -> void:
 	movement.apply_gravity_and_slide(delta)
 
 
+@rpc("authority", "unreliable")
+func _sync_enemy_transform(pos: Vector3, rot: Vector3) -> void:
+	if multiplayer.is_server():
+		return
+	global_position = pos
+	global_rotation = rot
+
+
 func _on_ai_attack(target: Node3D, damage: int) -> void:
 	AudioManager.play_enemy_attack()
 	if is_instance_valid(target) and target.has_method("take_damage"):
@@ -97,6 +125,16 @@ func _on_ai_attack(target: Node3D, damage: int) -> void:
 
 
 func take_damage(amount: int, knockback := false) -> void:
+	if not multiplayer.is_server():
+		rpc("_take_damage_rpc", amount, knockback)
+		return
+	health.take_damage(amount, knockback)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _take_damage_rpc(amount: int, knockback: bool) -> void:
+	if not multiplayer.is_server():
+		return
 	health.take_damage(amount, knockback)
 
 
