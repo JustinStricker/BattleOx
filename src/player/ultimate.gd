@@ -75,7 +75,7 @@ func try_fire() -> bool:
 	return true
 
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func _request_ultimate(origin: Vector3, direction: Vector3) -> void:
 	if not multiplayer.is_server():
 		return
@@ -87,7 +87,7 @@ func _request_ultimate(origin: Vector3, direction: Vector3) -> void:
 	rpc("_spawn_ultimate_projectile", origin, direction)
 
 
-@rpc("any_peer", "unreliable")
+@rpc("any_peer", "call_remote", "unreliable")
 func _sync_charge(val: float) -> void:
 	charge = val
 	charge_changed.emit(charge)

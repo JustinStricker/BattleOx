@@ -56,7 +56,7 @@ func _request_slash_rpc(origin: Vector3, forward: Vector3) -> void:
 	rpc("_play_slash_visual")
 
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func _play_slash_visual() -> void:
 	if is_slashing:
 		return

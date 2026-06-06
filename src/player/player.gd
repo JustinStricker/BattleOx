@@ -60,6 +60,10 @@ var _camera_bob_offset: float = 0.0
 var _anim_time: float = 0.0
 var _last_positions: Array[Vector3] = []
 
+# Throttle state sync to every N physics frames so we don't flood the network
+var _sync_counter: int = 0
+const SYNC_INTERVAL: int = 3
+
 
 func _ready() -> void:
 	add_to_group("player")
@@ -67,6 +71,15 @@ func _ready() -> void:
 	_saved_mask = collision_mask
 
 	_is_remote = multiplayer.multiplayer_peer != null and get_multiplayer_authority() != multiplayer.get_unique_id()
+
+	# Godot 4.6 idiom: Authority is set in the spawn function and cascades automatically to all children
+	# (recursive=true by default). RPCs on child nodes (Ultimate, Bow) route correctly because authority
+	# inherits from the Player root.
+	# Apply spawn position set by MultiplayerSpawner before we entered the scene tree.
+	# Can't set position inside the spawn_function because the node isn't in the tree yet.
+	if _spawn_position != Vector3():
+		global_position = _spawn_position
+
 	if _is_remote:
 		if camera_node:
 			camera_node.current = false
@@ -242,7 +255,7 @@ func take_damage(amount: int) -> void:
 			rpc_id(1, "request_die")
 
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func request_die() -> void:
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
@@ -267,13 +280,13 @@ func _respawn_after_delay() -> void:
 		rpc_id(get_multiplayer_authority(), "_respawn_client", _spawn_position)
 
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func _sync_health(hp: int) -> void:
 	health = hp
 	health_changed.emit(health, max_health)
 
 
-@rpc("authority", "reliable")
+@rpc("authority", "call_remote", "reliable")
 func _respawn_client(pos: Vector3) -> void:
 	global_position = pos
 	health = max_health
@@ -488,9 +501,29 @@ func _physics_process(delta: float) -> void:
 	velocity.z = velocity_vec.z
 	move_and_slide()
 
+	# Periodically broadcast this player's position+velocity to all peers so remote copies move.
+	# This is a trusted-client approach — the authority's position is forwarded as-is. A fully
+	# server-authoritative movement model would instead send raw inputs and have the server run
+	# physics, which is a larger refactor for later.
+	if not _is_remote and multiplayer.multiplayer_peer != null:
+		_sync_counter += 1
+		if _sync_counter >= SYNC_INTERVAL:
+			_sync_counter = 0
+			rpc("_sync_player_state", global_position, velocity)
+
 	camera_node.position.y = 1.5 + _camera_bob_offset
 
-	_send_transform_sync()
+
+# Receives periodic position+velocity updates from the authoritative peer (the player who owns this
+# node). Only non-authoritative (remote) copies apply the update — the sender skips itself via the
+# authority check. Using ANY_PEER so clients can broadcast to all peers including the server.
+@rpc("any_peer", "call_remote", "unreliable")
+func _sync_player_state(pos: Vector3, vel: Vector3) -> void:
+	# Skip self — only remote copies should apply the incoming state
+	if multiplayer.multiplayer_peer != null and get_multiplayer_authority() == multiplayer.get_unique_id():
+		return
+	global_position = pos
+	velocity = vel
 
 
 func _process(delta: float) -> void:
@@ -526,29 +559,3 @@ func _process(delta: float) -> void:
 		torso.position.y = -0.4 + breath
 		head.position.x = 0.0
 		head.position.y = 0.45 - breath * 0.4
-
-
-func _send_transform_sync() -> void:
-	if not multiplayer.multiplayer_peer:
-		return
-	if Engine.get_process_frames() % 3 != 0:
-		return
-	if multiplayer.is_server():
-		rpc("_sync_transform", global_position, global_rotation)
-	else:
-		rpc_id(1, "_report_transform", global_position, global_rotation)
-
-
-@rpc("any_peer", "unreliable", "call_local")
-func _report_transform(pos: Vector3, rot: Vector3) -> void:
-	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
-		return
-	rpc("_sync_transform", pos, rot)
-
-
-@rpc("any_peer", "unreliable", "call_local")
-func _sync_transform(pos: Vector3, rot: Vector3) -> void:
-	if not _is_remote:
-		return
-	global_position = pos
-	global_rotation = rot

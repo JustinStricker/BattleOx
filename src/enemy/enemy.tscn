@@ -7,6 +7,14 @@
 [ext_resource type="Script" path="res://src/enemy/components/movement_component.gd" id="5_2mgnc"]
 [ext_resource type="Script" path="res://src/enemy/components/ai_state_machine.gd" id="6_7mqdp"]
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_drwxb"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = false
+properties/0/sync = true
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = false
+properties/1/sync = true
+
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_xlg2h"]
 radius = 0.4
 height = 1.4
@@ -31,3 +39,8 @@ script = ExtResource("5_2mgnc")
 
 [node name="AIStateMachine" type="Node" parent="."]
 script = ExtResource("6_7mqdp")
+
+[node name="StateSync" type="MultiplayerSynchronizer" parent="."]
+root_path = NodePath("..")
+replication_interval = 0.05
+replication_config = SubResource("SceneReplicationConfig_drwxb")

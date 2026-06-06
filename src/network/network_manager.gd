@@ -6,8 +6,11 @@ signal server_disconnected()
 signal connection_failed()
 
 const DEFAULT_PORT: int = 23456
+const DEFAULT_MAX_CLIENTS: int = 4
 
 var _is_host: bool = false
+var _is_dedicated_server: bool = false
+var max_clients: int = DEFAULT_MAX_CLIENTS
 
 var local_player_id: int:
 	get: return multiplayer.get_unique_id() if multiplayer.multiplayer_peer != null else 1
@@ -16,7 +19,10 @@ var is_host: bool:
 	get: return _is_host
 
 var is_client: bool:
-	get: return not _is_host
+	get: return not _is_host and not _is_dedicated_server
+
+var is_dedicated_server: bool:
+	get: return _is_dedicated_server
 
 var peer: ENetMultiplayerPeer
 
@@ -29,14 +35,27 @@ func _ready() -> void:
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 
-func host_game(port: int = DEFAULT_PORT) -> void:
+func host_game(port: int = DEFAULT_PORT, max_players: int = DEFAULT_MAX_CLIENTS) -> void:
 	peer = ENetMultiplayerPeer.new()
-	var err := peer.create_server(port)
+	var err := peer.create_server(port, max_players)
 	if err != OK:
 		push_error("Failed to create server: %d" % err)
 		return
+	max_clients = max_players
 	multiplayer.multiplayer_peer = peer
 	_is_host = true
+
+
+func host_dedicated(port: int = DEFAULT_PORT, max_players: int = DEFAULT_MAX_CLIENTS) -> void:
+	peer = ENetMultiplayerPeer.new()
+	var err := peer.create_server(port, max_players)
+	if err != OK:
+		push_error("Failed to create dedicated server: %d" % err)
+		return
+	max_clients = max_players
+	multiplayer.multiplayer_peer = peer
+	_is_host = true
+	_is_dedicated_server = true
 
 
 func join_game(ip: String, port: int = DEFAULT_PORT) -> void:
@@ -53,6 +72,7 @@ func join_game(ip: String, port: int = DEFAULT_PORT) -> void:
 func leave_game() -> void:
 	multiplayer.multiplayer_peer = null
 	_is_host = false
+	_is_dedicated_server = false
 	if peer:
 		peer.close()
 		peer = null

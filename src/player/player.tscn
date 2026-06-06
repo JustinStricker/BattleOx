@@ -6,6 +6,14 @@
 [ext_resource type="Script" path="res://src/player/wings.gd" id="4_wingsx"]
 [ext_resource type="Script" path="res://src/player/ultimate.gd" id="5_ultimx"]
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_xjnkq"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = false
+properties/0/sync = true
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = false
+properties/1/sync = true
+
 [sub_resource type="CapsuleShape3D" id="2_csxly"]
 radius = 0.5
 height = 1.6
@@ -77,3 +85,8 @@ script = ExtResource("4_wingsx")
 
 [node name="Ultimate" type="Node3D" parent="Camera3D"]
 script = ExtResource("5_ultimx")
+
+[node name="StateSync" type="MultiplayerSynchronizer" parent="."]
+root_path = NodePath("..")
+replication_interval = 0.05
+replication_config = SubResource("SceneReplicationConfig_xjnkq")

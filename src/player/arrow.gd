@@ -25,23 +25,12 @@ static func _init_materials() -> void:
 	_nock_mat.albedo_color = Color(0.2, 0.15, 0.1)
 	_nock_mat.roughness = 0.8
 
-static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: float, authoritative: bool = true) -> void:
+# Builds the shared arrow mesh nodes and attaches them to the given RigidBody3D.
+# Used by both authoritative and visual-only arrows to avoid code duplication.
+static func _build_arrow_mesh(arrow: RigidBody3D, origin: Vector3, direction: Vector3, speed: float) -> void:
 	_init_materials()
-	var arrow: RigidBody3D = RigidBody3D.new()
-	arrow.set_script(preload("res://src/player/arrow_body.gd"))
 	arrow.add_to_group("arrow")
-	arrow.contact_monitor = true
-	arrow.max_contacts_reported = 1
 
-	var col: CollisionShape3D = CollisionShape3D.new()
-	col.shape = CapsuleShape3D.new()
-	col.shape.height = 0.6
-	col.shape.radius = 0.05
-	col.rotation = Vector3(deg_to_rad(90), 0, 0)
-	arrow.add_child(col)
-	arrow.collision_mask = 1 | 2
-
-	# Glowing shaft material — bright self-illumination, no light casting on ground
 	var glow_shaft_mat: StandardMaterial3D = StandardMaterial3D.new()
 	glow_shaft_mat.albedo_color = Color(0.6, 0.4, 0.2)
 	glow_shaft_mat.roughness = 0.7
@@ -58,7 +47,6 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 	shaft.rotation = Vector3(deg_to_rad(90), 0, 0)
 	arrow.add_child(shaft)
 
-	# Glowing tip — bright self-illumination
 	var glow_tip_mat: StandardMaterial3D = StandardMaterial3D.new()
 	glow_tip_mat.albedo_color = Color(0.75, 0.8, 0.85)
 	glow_tip_mat.metallic = 0.9
@@ -100,7 +88,6 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 	nock.position = Vector3(0, 0, 0.29)
 	arrow.add_child(nock)
 
-	parent.add_child(arrow)
 	arrow.global_position = origin
 	arrow.look_at(origin + direction, Vector3.UP)
 	arrow.linear_velocity = direction * speed
@@ -136,7 +123,6 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 
 	trail.process_material = trail_mat
 
-	# Billboard quads make a smooth ribbon — wider than tall for a streak look
 	var trail_qmesh := QuadMesh.new()
 	trail_qmesh.size = Vector2(0.18, 0.04)
 	trail_qmesh.material = null
@@ -155,25 +141,57 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3, speed: floa
 
 	arrow.add_child(trail)
 
-	var z_damage := 25
-	arrow.body_entered.connect(func(body: Node):
-		if not authoritative:
-			AudioManager.play_arrow_hit()
-			trail.emitting = false
-			arrow.queue_free()
-			return
-		if body.is_in_group("enemy"):
-			if body.has_method("take_damage"):
-				body.take_damage(z_damage, true)
-				EventBus.damage_dealt.emit(z_damage)
-			AudioManager.play_arrow_hit()
-			trail.emitting = false
-			arrow.queue_free()
-	)
-
 	var timer: Timer = Timer.new()
 	timer.wait_time = 5.0
 	timer.one_shot = true
 	timer.timeout.connect(func(): if is_instance_valid(arrow): arrow.queue_free())
 	arrow.add_child(timer)
 	timer.start()
+
+
+# Godot 4.6 authoritative model: Only the server spawns physics objects that can deal damage.
+# Clients receive visual-only replicas via "authority"-mode RPCs. This prevents clients from
+# creating unauthorized damage-causing entities and keeps the server as the single source of truth.
+static func spawn_authoritative(parent: Node, origin: Vector3, direction: Vector3, speed: float) -> void:
+	var arrow: RigidBody3D = RigidBody3D.new()
+	arrow.set_script(preload("res://src/player/arrow_body.gd"))
+	arrow.contact_monitor = true
+	arrow.max_contacts_reported = 1
+
+	var col: CollisionShape3D = CollisionShape3D.new()
+	col.shape = CapsuleShape3D.new()
+	col.shape.height = 0.6
+	col.shape.radius = 0.05
+	col.rotation = Vector3(deg_to_rad(90), 0, 0)
+	arrow.add_child(col)
+	arrow.collision_mask = 1 | 2
+
+	parent.add_child(arrow)
+	_build_arrow_mesh(arrow, origin, direction, speed)
+
+	var z_damage := 25
+	arrow.body_entered.connect(func(body: Node):
+		if body.is_in_group("enemy"):
+			if body.has_method("take_damage"):
+				body.take_damage(z_damage, true)
+				EventBus.damage_dealt.emit(z_damage)
+			AudioManager.play_arrow_hit()
+		arrow.queue_free()
+	)
+
+
+# Spawns a visual-only arrow on a client (no collision damage).
+# The server tells clients where arrows appear so everyone sees the same projectile.
+static func spawn_visual(parent: Node, origin: Vector3, direction: Vector3, speed: float) -> void:
+	var arrow: RigidBody3D = RigidBody3D.new()
+	arrow.set_script(preload("res://src/player/arrow_body.gd"))
+	arrow.contact_monitor = false
+
+	parent.add_child(arrow)
+	_build_arrow_mesh(arrow, origin, direction, speed)
+
+	# Visual-only arrow auto-destructs — it cannot deal damage
+	arrow.body_entered.connect(func(_body: Node):
+		AudioManager.play_arrow_hit()
+		arrow.queue_free()
+	)
