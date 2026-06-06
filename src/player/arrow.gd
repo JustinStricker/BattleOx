@@ -182,16 +182,63 @@ static func spawn_authoritative(parent: Node, origin: Vector3, direction: Vector
 
 # Spawns a visual-only arrow on a client (no collision damage).
 # The server tells clients where arrows appear so everyone sees the same projectile.
+# Uses a lightweight Node3D with a tween instead of RigidBody3D to avoid physics desync.
 static func spawn_visual(parent: Node, origin: Vector3, direction: Vector3, speed: float) -> void:
-	var arrow: RigidBody3D = RigidBody3D.new()
-	arrow.set_script(preload("res://src/player/arrow_body.gd"))
-	arrow.contact_monitor = false
+	var arrow: Node3D = Node3D.new()
+	_init_materials()
+	arrow.add_to_group("arrow")
 
 	parent.add_child(arrow)
-	_build_arrow_mesh(arrow, origin, direction, speed)
 
-	# Visual-only arrow auto-destructs — it cannot deal damage
-	arrow.body_entered.connect(func(_body: Node):
-		AudioManager.play_arrow_hit()
-		arrow.queue_free()
+	arrow.global_position = origin
+	arrow.look_at(origin + direction, Vector3.UP)
+
+	var shaft: MeshInstance3D = MeshInstance3D.new()
+	shaft.mesh = CylinderMesh.new()
+	shaft.mesh.top_radius = 0.035
+	shaft.mesh.bottom_radius = 0.035
+	shaft.mesh.height = 0.55
+	shaft.mesh.material = _shaft_mat
+	shaft.rotation = Vector3(deg_to_rad(90), 0, 0)
+	arrow.add_child(shaft)
+
+	var tip: MeshInstance3D = MeshInstance3D.new()
+	tip.mesh = CylinderMesh.new()
+	tip.mesh.top_radius = 0.0
+	tip.mesh.bottom_radius = 0.055
+	tip.mesh.height = 0.15
+	tip.mesh.material = _tip_mat
+	tip.rotation = Vector3(deg_to_rad(90), 0, 0)
+	tip.position = Vector3(0, 0, -0.35)
+	arrow.add_child(tip)
+
+	for i: int in 3:
+		var holder: Node3D = Node3D.new()
+		holder.rotation = Vector3(0, 0, deg_to_rad(i * 120))
+		holder.position = Vector3(0, 0, 0.22)
+		arrow.add_child(holder)
+		var f: MeshInstance3D = MeshInstance3D.new()
+		f.mesh = BoxMesh.new()
+		(f.mesh as BoxMesh).size = Vector3(0.07, 0.01, 0.1)
+		f.mesh.material = _fletch_mat
+		f.position = Vector3(0.04, 0, 0)
+		holder.add_child(f)
+
+	var nock: MeshInstance3D = MeshInstance3D.new()
+	nock.mesh = CylinderMesh.new()
+	nock.mesh.top_radius = 0.05
+	nock.mesh.bottom_radius = 0.05
+	nock.mesh.height = 0.025
+	nock.mesh.material = _nock_mat
+	nock.rotation = Vector3(deg_to_rad(90), 0, 0)
+	nock.position = Vector3(0, 0, 0.29)
+	arrow.add_child(nock)
+
+	# Animate along trajectory with a tween — avoids RigidBody3D physics desync
+	var end_pos := origin + direction * speed * 5.0
+	var tween := parent.create_tween()
+	tween.tween_property(arrow, "global_position", end_pos, 5.0).set_trans(Tween.TRANS_LINEAR)
+	tween.tween_callback(func():
+		if is_instance_valid(arrow):
+			arrow.queue_free()
 	)

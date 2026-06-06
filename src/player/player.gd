@@ -64,6 +64,10 @@ var _last_positions: Array[Vector3] = []
 var _sync_counter: int = 0
 const SYNC_INTERVAL: int = 3
 
+# Server-authoritative movement: input forwarding + state validation
+var _input_seq: int = 0
+var _pending_input: Dictionary = {}
+
 
 func _ready() -> void:
 	add_to_group("player")
@@ -252,7 +256,7 @@ func take_damage(amount: int) -> void:
 			rpc("_die")
 			_respawn_after_delay()
 		else:
-			rpc_id(1, "request_die")
+			rpc_id(NetworkManager.SERVER_ID, "request_die")
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -401,8 +405,16 @@ func _on_jump_launched(charge: float) -> void:
 	bob_tween.tween_property(self, "_camera_bob_offset", 0.0, 0.4)
 
 func _physics_process(delta: float) -> void:
+	# Server simulates all players. For remote players, apply received input.
+	if multiplayer.is_server() and _is_remote:
+		_server_simulate_remote(delta)
+		return
+
+	# Client-side remote copies: skip physics, animation is handled in _process.
 	if _is_remote:
 		return
+
+	# Shared timers for the locally-controlled copy.
 	invincible_timer = max(invincible_timer - delta, 0.0)
 	dash_cooldown = max(dash_cooldown - delta, 0.0)
 
@@ -501,32 +513,94 @@ func _physics_process(delta: float) -> void:
 	velocity.z = velocity_vec.z
 	move_and_slide()
 
-	# Periodically broadcast this player's position+velocity to all peers so remote copies move.
-	# This is a trusted-client approach — the authority's position is forwarded as-is. A fully
-	# server-authoritative movement model would instead send raw inputs and have the server run
-	# physics, which is a larger refactor for later.
-	if not _is_remote and multiplayer.multiplayer_peer != null:
-		_sync_counter += 1
-		if _sync_counter >= SYNC_INTERVAL:
-			_sync_counter = 0
-			rpc("_sync_player_state", global_position, velocity)
+	# Send input to server for validation every physics frame.
+	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
+		rpc("_server_input", _capture_input_dict())
 
 	camera_node.position.y = 1.5 + _camera_bob_offset
 
 
-# Receives periodic position+velocity updates from the authoritative peer (the player who owns this
-# node). Only non-authoritative (remote) copies apply the update — the sender skips itself via the
-# authority check. Using ANY_PEER so clients can broadcast to all peers including the server.
+# Captures the local player's current input state to send to the server.
+func _capture_input_dict() -> Dictionary:
+	var input_dir := Vector3.ZERO
+	if Input.is_action_pressed("move_forward"): input_dir.z -= 1
+	if Input.is_action_pressed("move_back"): input_dir.z += 1
+	if Input.is_action_pressed("move_left"): input_dir.x -= 1
+	if Input.is_action_pressed("move_right"): input_dir.x += 1
+	_input_seq += 1
+	return {
+		"dir": input_dir.normalized(),
+		"jump_held": _jump_held,
+		"is_charging_jump": is_charging_jump,
+		"jump_charge": jump_charge,
+		"is_rolling": is_rolling,
+		"is_dashing": is_dashing,
+		"seq": _input_seq,
+	}
+
+
+# Receives input from the owning client and stores it for server-side simulation.
 @rpc("any_peer", "call_remote", "unreliable")
-func _sync_player_state(pos: Vector3, vel: Vector3) -> void:
-	# Skip self — only remote copies should apply the incoming state
-	if multiplayer.multiplayer_peer != null and get_multiplayer_authority() == multiplayer.get_unique_id():
+func _server_input(data: Dictionary) -> void:
+	if not multiplayer.is_server():
+		return
+	if get_multiplayer_authority() != multiplayer.get_remote_sender_id():
+		return
+	_pending_input = data
+
+
+# Server simulates a remote player's movement using received input,
+# then broadcasts the authoritative position to all clients.
+func _server_simulate_remote(delta: float) -> void:
+	if _pending_input.is_empty():
+		return
+
+	var input_dir: Vector3 = _pending_input.get("dir", Vector3.ZERO)
+	_jump_held = _pending_input.get("jump_held", false)
+
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+
+	if _jump_held and is_on_floor() and not is_charging_jump:
+		is_charging_jump = true
+		jump_charge = 0.0
+
+	if is_charging_jump:
+		if is_on_floor():
+			jump_charge = min(jump_charge + delta / JUMP_CHARGE_TIME, 1.0)
+		if not _jump_held or jump_charge >= 1.0 or not is_on_floor():
+			velocity.y = lerp(JUMP_VELOCITY_MIN, JUMP_VELOCITY_MAX, jump_charge)
+			is_charging_jump = false
+			jump_charge = 0.0
+
+	if not is_on_floor() and not _jump_held and velocity.y > 0:
+		velocity.y *= JUMP_CUT_MULTIPLIER
+
+	var direction: Vector3 = (transform.basis * input_dir).normalized()
+	velocity.x = direction.x * SPEED
+	velocity.z = direction.z * SPEED
+	move_and_slide()
+
+	# Broadcast authoritative position to all clients every SYNC_INTERVAL frames
+	_sync_counter += 1
+	if _sync_counter >= SYNC_INTERVAL:
+		_sync_counter = 0
+		rpc("_sync_authoritative_state", global_position, velocity)
+
+
+# Server broadcasts authoritative position/velocity for a player.
+# Clients apply it to remote copies; the owning client skips (uses prediction).
+@rpc("any_peer", "call_remote", "unreliable")
+func _sync_authoritative_state(pos: Vector3, vel: Vector3) -> void:
+	if get_multiplayer_authority() == multiplayer.get_unique_id():
 		return
 	global_position = pos
 	velocity = vel
 
 
 func _process(delta: float) -> void:
+	if multiplayer.is_server():
+		return
 	if not _is_remote:
 		return
 	_anim_time += delta

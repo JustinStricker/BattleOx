@@ -82,5 +82,5 @@ func _on_server_disconnected() -> void:
 func _start_game() -> void:
 	var game := SurvivalMode.new()
 	game.name = "SurvivalMode"
-	add_child(game)
+	get_tree().root.add_child(game, true)
 	hide()

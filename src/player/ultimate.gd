@@ -53,7 +53,7 @@ func try_fire() -> bool:
 	elif multiplayer.is_server():
 		rpc("_spawn_ultimate_projectile", origin, direction.normalized())
 	else:
-		rpc_id(1, "_request_ultimate", origin, direction.normalized())
+		rpc_id(NetworkManager.SERVER_ID, "_request_ultimate", origin, direction.normalized())
 
 	var bow := camera.get_node_or_null("Bow") as Node3D
 	if bow:

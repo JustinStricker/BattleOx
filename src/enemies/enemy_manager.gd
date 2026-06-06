@@ -134,7 +134,7 @@ func _try_spawn() -> void:
 
 		var enemy: Enemy = EnemyScene.instantiate() as Enemy
 		enemy.name = "Enemy_%d" % _enemy_spawn_index
-		add_child(enemy)
+		add_child(enemy, true)
 		var spawn_pos := Vector3(sx, h + 15.0, sz)
 		enemy.global_position = spawn_pos
 		enemies.append(enemy)
@@ -156,7 +156,7 @@ func _spawn_enemy_replica(index: int, spawn_pos: Vector3, type_path: String, bod
 	enemy.zombie_type = load(type_path)
 	enemy._replica = true
 	enemy.set_meta("replica_body_scale", body_scale)
-	add_child(enemy)
+	add_child(enemy, true)
 	enemy.skeleton.body_scale = body_scale
 	enemy.global_position = spawn_pos
 	enemy.collision_shape.disabled = true

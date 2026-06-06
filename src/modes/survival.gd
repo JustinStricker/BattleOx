@@ -23,7 +23,7 @@ const BiomeOverlayScene = preload("res://src/world/biome_overlay.gd")
 func _ready() -> void:
 	_player_spawner = MultiplayerSpawner.new()
 	_player_spawner.name = "PlayerSpawner"
-	_player_spawner.spawn_path = NodePath("..")
+	_player_spawner.spawn_path = NodePath(".")
 	_player_spawner.spawn_function = _player_spawn_function
 	add_child(_player_spawner)
 
@@ -72,7 +72,7 @@ func _host_setup() -> void:
 	enemy_mgr = EnemyManager.new()
 	enemy_mgr.name = "EnemyManager"
 	enemy_mgr.world_gen = world_gen
-	add_child(enemy_mgr)
+	add_child(enemy_mgr, true)
 	enemy_mgr.enemy_killed.connect(_on_enemy_killed.bind(ui_layer))
 
 	loading.update("Ready!", 1.0)
@@ -202,7 +202,7 @@ func send_world_config(seed_val: int, w_size: float, w_level: float, spawn_pos: 
 		loading.update("Ready!", 1.0)
 	await get_tree().create_timer(0.2).timeout
 
-	if loading:
+	if is_instance_valid(loading):
 		var tween := create_tween()
 		if loading.get_node_or_null("ColorRect"):
 			tween.tween_property(loading.get_node("ColorRect"), "modulate", Color(1, 1, 1, 0), 0.15)
@@ -237,7 +237,7 @@ func _on_host_arrow_fired(origin: Vector3, direction: Vector3, speed: float) -> 
 
 func _on_client_arrow_fired(origin: Vector3, direction: Vector3, speed: float) -> void:
 	# Client sends request to server; server validates and spawns authoritative arrow
-	rpc_id(1, "_request_arrow", origin, direction, speed)
+	rpc_id(NetworkManager.SERVER_ID, "_request_arrow", origin, direction, speed)
 
 
 @rpc("any_peer", "call_remote", "reliable")

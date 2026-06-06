@@ -7,6 +7,10 @@ signal connection_failed()
 
 const DEFAULT_PORT: int = 23456
 const DEFAULT_MAX_CLIENTS: int = 4
+const SERVER_ID: int = 1
+const ENetChannels: int = 4
+const ENetInBandwidth: int = 0
+const ENetOutBandwidth: int = 0
 
 var _is_host: bool = false
 var _is_dedicated_server: bool = false
@@ -25,6 +29,7 @@ var is_dedicated_server: bool:
 	get: return _is_dedicated_server
 
 var peer: ENetMultiplayerPeer
+var _upnp: UPNP
 
 
 func _ready() -> void:
@@ -37,18 +42,19 @@ func _ready() -> void:
 
 func host_game(port: int = DEFAULT_PORT, max_players: int = DEFAULT_MAX_CLIENTS) -> void:
 	peer = ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, max_players)
+	var err := peer.create_server(port, max_players, ENetChannels, ENetInBandwidth, ENetOutBandwidth)
 	if err != OK:
 		push_error("Failed to create server: %d" % err)
 		return
 	max_clients = max_players
 	multiplayer.multiplayer_peer = peer
 	_is_host = true
+	_try_upnp(port)
 
 
 func host_dedicated(port: int = DEFAULT_PORT, max_players: int = DEFAULT_MAX_CLIENTS) -> void:
 	peer = ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, max_players)
+	var err := peer.create_server(port, max_players, ENetChannels, ENetInBandwidth, ENetOutBandwidth)
 	if err != OK:
 		push_error("Failed to create dedicated server: %d" % err)
 		return
@@ -56,11 +62,12 @@ func host_dedicated(port: int = DEFAULT_PORT, max_players: int = DEFAULT_MAX_CLI
 	multiplayer.multiplayer_peer = peer
 	_is_host = true
 	_is_dedicated_server = true
+	_try_upnp(port)
 
 
 func join_game(ip: String, port: int = DEFAULT_PORT) -> void:
 	peer = ENetMultiplayerPeer.new()
-	var err := peer.create_client(ip, port)
+	var err := peer.create_client(ip, port, ENetChannels, ENetInBandwidth, ENetOutBandwidth)
 	if err != OK:
 		push_error("Failed to create client: %d" % err)
 		connection_failed.emit()
@@ -76,6 +83,7 @@ func leave_game() -> void:
 	if peer:
 		peer.close()
 		peer = null
+	_remove_upnp()
 
 
 func _on_peer_connected(id: int) -> void:
@@ -97,3 +105,23 @@ func _on_connection_failed() -> void:
 func _on_server_disconnected() -> void:
 	leave_game()
 	server_disconnected.emit()
+
+
+func _try_upnp(port: int) -> void:
+	if not _upnp:
+		_upnp = UPNP.new()
+	var err := _upnp.discover()
+	if err != OK:
+		push_warning("UPNP discovery failed: %d — online players may not connect" % err)
+		return
+	err = _upnp.add_port_mapping(port, port, "Godot Demo", "UDP")
+	if err != OK:
+		push_warning("UPNP port mapping failed: %d" % err)
+	else:
+		print("UPNP: Port %d forwarded successfully" % port)
+
+
+func _remove_upnp() -> void:
+	if _upnp and _upnp.get_gateway():
+		_upnp.delete_port_mapping(DEFAULT_PORT, "UDP")
+	_upnp = null
