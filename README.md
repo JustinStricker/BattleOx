@@ -1,4 +1,4 @@
-# Demo — Godot 4.6 3D Open-World Action Game
+# BattleOx — Godot 4.6 3D Open-World Action Game
 
 A procedurally generated open-world 3D action game built in **Godot 4.6** using **Jolt Physics** and the **Forward Plus** renderer. Features terrain/biome generation, procedural villages, a chargeable bow and dash-slash melee combat, zombie enemies with state-machine AI, collectible scoring, and custom GLSL shaders.
 

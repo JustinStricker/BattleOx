@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="demo"
+config/name="BattleOx"
 run/main_scene="uid://ijsiyhy4ixbx"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
@@ -25,7 +25,7 @@ NetworkManager="*res://src/network/network_manager.gd"
 [debug]
 
 file_logging/enable_file_logging=true
-file_logging/log_path="/Users/justin/demo/godot.log"
+file_logging/log_path="/Users/justin/BattleOx/godot.log"
 file_logging/max_log_files=1
 
 [display]
