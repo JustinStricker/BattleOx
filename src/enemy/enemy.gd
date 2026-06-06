@@ -22,6 +22,8 @@ var _dead: bool = false
 var _prev_ai_state: int = -1
 var _target_pos: Vector3
 var _target_rot: Vector3
+var _replica_moving: bool = false
+var _replica_attacking: bool = false
 
 
 func _ready() -> void:
@@ -87,6 +89,7 @@ func _physics_process(delta: float) -> void:
 	if _replica and multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		global_position = global_position.lerp(_target_pos, 10.0 * delta)
 		global_rotation = global_rotation.lerp(_target_rot, 10.0 * delta)
+		skeleton.update_animation(delta, _replica_moving, _replica_attacking, false, 0.0)
 		return
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
@@ -99,12 +102,16 @@ func _physics_process(delta: float) -> void:
 
 	ai.process_ai(delta)
 
-	if Engine.get_process_frames() % 3 == 0 and multiplayer.multiplayer_peer != null:
-		rpc("_sync_enemy_transform", global_position, global_rotation)
-
 	var st := ai.state
 	var is_moving := st == AIStateMachine.State.WANDER or st == AIStateMachine.State.CHASE
 	var is_attacking := st == AIStateMachine.State.ATTACK
+
+	if Engine.get_process_frames() % 3 == 0 and multiplayer.multiplayer_peer != null:
+		rpc("_sync_enemy_transform", global_position, global_rotation, is_moving, is_attacking)
+
+	st = ai.state
+	is_moving = st == AIStateMachine.State.WANDER or st == AIStateMachine.State.CHASE
+	is_attacking = st == AIStateMachine.State.ATTACK
 	var speed := ai.chase_speed * ai.speed_multiplier if st == AIStateMachine.State.CHASE else ai.wander_speed * ai.speed_multiplier
 
 	if is_attacking and _prev_ai_state != AIStateMachine.State.ATTACK:
@@ -117,7 +124,7 @@ func _physics_process(delta: float) -> void:
 
 
 @rpc("authority", "unreliable")
-func _sync_enemy_transform(pos: Vector3, rot: Vector3) -> void:
+func _sync_enemy_transform(pos: Vector3, rot: Vector3, is_moving: bool = false, is_attacking: bool = false) -> void:
 	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
 		return
 	if not _replica:
@@ -125,6 +132,8 @@ func _sync_enemy_transform(pos: Vector3, rot: Vector3) -> void:
 		global_rotation = rot
 	_target_pos = pos
 	_target_rot = rot
+	_replica_moving = is_moving
+	_replica_attacking = is_attacking
 
 
 func _on_ai_attack(target: Node3D, damage: int) -> void:

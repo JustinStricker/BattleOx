@@ -267,7 +267,7 @@ func _respawn_after_delay() -> void:
 		rpc_id(get_multiplayer_authority(), "_respawn_client", _spawn_position)
 
 
-@rpc("authority", "reliable")
+@rpc("any_peer", "reliable")
 func _sync_health(hp: int) -> void:
 	health = hp
 	health_changed.emit(health, max_health)

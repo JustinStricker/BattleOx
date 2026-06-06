@@ -26,6 +26,10 @@ func _on_damage_dealt(amount: int) -> void:
 		return
 	charge = min(charge + amount * CHARGE_PER_DAMAGE, MAX_CHARGE)
 	charge_changed.emit(charge)
+	if multiplayer.multiplayer_peer != null:
+		var owner_id := get_multiplayer_authority()
+		if owner_id != multiplayer.get_unique_id():
+			rpc_id(owner_id, "_sync_charge", charge)
 
 
 func can_fire() -> bool:
@@ -75,10 +79,21 @@ func try_fire() -> bool:
 func _request_ultimate(origin: Vector3, direction: Vector3) -> void:
 	if not multiplayer.is_server():
 		return
+	charge = 0.0
+	charge_changed.emit(charge)
+	var owner_id := get_multiplayer_authority()
+	if owner_id != multiplayer.get_unique_id():
+		rpc_id(owner_id, "_sync_charge", charge)
 	rpc("_spawn_ultimate_projectile", origin, direction)
 
 
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "unreliable")
+func _sync_charge(val: float) -> void:
+	charge = val
+	charge_changed.emit(charge)
+
+
+@rpc("any_peer", "call_local", "reliable")
 func _spawn_ultimate_projectile(origin: Vector3, direction: Vector3) -> void:
 	_spawn_projectile_at(origin, direction)
 
@@ -86,8 +101,9 @@ func _spawn_ultimate_projectile(origin: Vector3, direction: Vector3) -> void:
 func _spawn_projectile_at(origin: Vector3, direction: Vector3) -> void:
 	var projectile := Node3D.new()
 	projectile.set_script(ProjectileScript)
-	projectile.setup(origin, direction)
+	var auth := multiplayer.multiplayer_peer == null or multiplayer.is_server()
 	get_tree().current_scene.add_child(projectile)
+	projectile.setup(origin, direction, auth)
 
 
 func _shake_camera(amount: float, duration: float) -> void:

@@ -12,11 +12,13 @@ var direction: Vector3
 var traveled: float = 0.0
 var tick_timer: float = 0.0
 var hit_enemies: Array[Node] = []
+var authoritative: bool = true
 
 var _beam_mat: ShaderMaterial
 
 
-func setup(origin: Vector3, dir: Vector3) -> void:
+func setup(origin: Vector3, dir: Vector3, auth: bool = true) -> void:
+	authoritative = auth
 	global_position = origin
 	direction = dir
 	var up := Vector3.UP
@@ -123,7 +125,8 @@ func _physics_process(delta: float) -> void:
 	if tick_timer >= TICK_INTERVAL:
 		tick_timer = 0.0
 		AudioManager.play_beam_tick()
-		_hit_enemies()
+		if authoritative:
+			_hit_enemies()
 
 
 func _hit_enemies() -> void:

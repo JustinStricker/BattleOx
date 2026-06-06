@@ -43,6 +43,8 @@ func start_slash() -> bool:
 				var origin := cam.global_position
 				var forward := -cam.global_transform.basis.z
 				rpc("_request_slash_rpc", origin, forward.normalized())
+	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		rpc("_play_slash_visual")
 	return true
 
 
@@ -51,6 +53,14 @@ func _request_slash_rpc(origin: Vector3, forward: Vector3) -> void:
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
 		return
 	_perform_slash_hit_at(origin, forward.normalized())
+	rpc("_play_slash_visual")
+
+
+@rpc("any_peer", "reliable")
+func _play_slash_visual() -> void:
+	if is_slashing:
+		return
+	_play_slash_animation()
 
 
 func _get_player() -> CharacterBody3D:

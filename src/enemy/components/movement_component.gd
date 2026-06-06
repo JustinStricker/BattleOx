@@ -32,7 +32,10 @@ func face_target(target_pos: Vector3, weight: float) -> void:
 	if dir.length() < 0.01:
 		return
 	var target_basis := Basis.looking_at(dir.normalized(), Vector3.UP)
-	body.transform.basis = body.transform.basis.orthonormalized().slerp(target_basis, weight)
+	var current := body.transform.basis
+	if abs(current.determinant()) < 0.001:
+		current = Basis.IDENTITY
+	body.transform.basis = current.orthonormalized().slerp(target_basis, weight)
 
 
 func ground_height(pos: Vector3) -> float:
