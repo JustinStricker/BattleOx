@@ -28,6 +28,9 @@ func _ready() -> void:
 	add_to_group("enemy")
 	collision_layer = 2
 	up_direction = Vector3.UP
+	floor_stop_on_slope = true
+	floor_max_angle = deg_to_rad(45.0)
+	floor_snap_length = 0.1
 	_pick_type_and_build()
 	ai.reset_timers()
 	_apply_type_to_ai()
@@ -114,6 +117,16 @@ func _physics_process(delta: float) -> void:
 	skeleton.update_animation(delta, is_moving, is_attacking, ai.is_surprised(), speed)
 
 	movement.apply_gravity_and_slide(delta)
+
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = global_position + Vector3.UP * 0.5
+	q.to = global_position + Vector3.DOWN * 1.0
+	q.collision_mask = 1
+	var hit: Dictionary = space.intersect_ray(q)
+	if hit and global_position.y < hit.position.y - 0.05:
+		global_position.y = hit.position.y
+		velocity.y = 0.0
 
 
 @rpc("authority", "call_remote", "unreliable")

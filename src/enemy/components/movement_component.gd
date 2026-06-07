@@ -10,6 +10,7 @@ func apply_gravity_and_slide(delta: float) -> void:
 	if not body.is_inside_tree():
 		return
 	body.velocity.y -= gravity * delta
+	body.velocity.y = max(body.velocity.y, -3.0)
 	body.move_and_slide()
 
 

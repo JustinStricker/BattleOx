@@ -135,7 +135,7 @@ func _try_spawn() -> void:
 		var enemy: Enemy = EnemyScene.instantiate() as Enemy
 		enemy.name = "Enemy_%d" % _enemy_spawn_index
 		add_child(enemy, true)
-		var spawn_pos := Vector3(sx, h + 15.0, sz)
+		var spawn_pos := Vector3(sx, h + 0.2, sz)
 		enemy.global_position = spawn_pos
 		enemies.append(enemy)
 		enemy.died.connect(_on_enemy_died.bind(enemy))
