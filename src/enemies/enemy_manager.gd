@@ -30,18 +30,8 @@ func _ready() -> void:
 	if not world_gen:
 		world_gen = get_parent().find_child("WorldGen") as WorldGen
 
-	# Godot 4.6 approach: Server is the single authority for NPC AI. Clients receive periodic position
-	# updates via "authority"-mode RPCs rather than running their own AI. This matches the idiomatic
-	# server-authoritative model where the server owns all non-player entities.
-	# Without this, client-side enemy replicas stand frozen at their spawn point forever.
-	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
-		var sync_timer := Timer.new()
-		sync_timer.name = "EnemySyncTimer"
-		# Sync every 0.5s — frequent enough for smooth movement, sparse enough to avoid flooding
-		sync_timer.wait_time = 0.5
-		sync_timer.timeout.connect(_on_enemy_sync_timer_timeout)
-		add_child(sync_timer)
-		sync_timer.start()
+	# Enemy position/rotation sync is handled by MultiplayerSynchronizer in enemy.tscn.
+	# The server runs AI and physics; MultiplayerSynchronizer replicates state to clients.
 
 
 func _process(delta: float) -> void:
@@ -189,26 +179,9 @@ func _despawn_enemy_replica(index: int) -> void:
 		_cleanup_dead()
 
 
-# Server-side periodic broadcast of all enemy positions to clients.
-# Called by EnemySyncTimer. Only the server runs this because replica positions must be authoritative.
-func _on_enemy_sync_timer_timeout() -> void:
-	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
-		return
-	for enemy in enemies:
-		if not is_instance_valid(enemy) or enemy._dead:
-			continue
-		rpc("_sync_enemy_position", int(enemy.name.trim_prefix("Enemy_")), enemy.global_position)
-
-
-# Applies server-authoritative enemy position on client replicas.
-# Without this, enemy replicas are frozen at spawn — clients never see enemies move.
-@rpc("authority", "call_remote", "unreliable")
-func _sync_enemy_position(index: int, position: Vector3) -> void:
-	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
-		return
-	var enemy := get_node_or_null("Enemy_%d" % index) as Enemy
-	if enemy:
-		enemy.global_position = position
+# Enemy position sync is now handled entirely by MultiplayerSynchronizer in enemy.tscn.
+# The SceneReplicationConfig syncs position and rotation from server authority to all clients.
+# No manual position broadcast needed.
 
 
 func _shake_replica_camera(amount: float, duration: float) -> void:

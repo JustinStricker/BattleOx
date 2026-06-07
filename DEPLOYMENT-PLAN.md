@@ -82,24 +82,29 @@ Develop with ENet (no config, instant iteration), swap to EOS P2P in Phase 4 wit
 
 ---
 
-## Phase 4 — EOS Integration
+## Phase 4 — EOS Integration (Ready to Implement)
 
-**Goal**: Replace direct IP connection with Epic Online Services.
+**Goal**: Replace direct IP connection with Epic Online Services for internet play.
 
-**New dependency**: `godot-eos` GDExtension (community) or custom wrapper around EOS C SDK
+**New dependency**: [`epic-online-services-godot`](https://github.com/3ddelano/epic-online-services-godot) (GDExtension, Godot 4.2+, actively maintained)
+- Provides `EOSGMultiplayerPeer` — drop-in replacement for `ENetMultiplayerPeer`
+- High Level API (HEOS): `HAuth`, `HLobbies`, `HP2P`, `HLeaderboards` — clean GDScript interface
+- Supports: Auth, Lobbies, P2P with NAT traversal + relay, Voice, Leaderboards, Anti-Cheat
 
-**Changes**:
-- `network_manager.gd` — Replace `ENetMultiplayerPeer` with EOS P2P `MultiplayerPeer`. `MultiplayerAPI` stays the same
-- `EOSManager.gd` (new autoload) — EOS Platform init (ProductID, SandboxID, DeploymentID, ClientId/Secret), login via Epic Account Services (or DeviceID for dev)
+**Changes** (minimal — transport is already abstracted):
+- `network_manager.gd` — Add `EOS_P2P` branch in `host_game()`/`join_game()` using `EOSGMultiplayerPeer`
+- `eos_auth.gd` (new autoload) — EOS Platform init (ProductID, SandboxID, DeploymentID, ClientId/Secret), login via `HAuth`
 - `main_menu.gd` — Replace IP fields with "Sign in with Epic" → "Create Lobby" / "Find Lobbies"
-- `lobby_manager.gd` (new) — Wraps EOS lobby/session APIs: create, search, join, attribute filtering
-- `player.gd` — Set display name from Epic display name
-- `project.godot` — Add EOS SDK config values
+- `eos_lobby.gd` (new) — Wraps `HLobbies` for create/search/join with attributes
+- `player.gd` — Set display name from `HAuth.display_name`
+- `project.godot` — Add EOS autoload, SDK config values
 
 **Considerations**:
-- Overlay (Shift+F2) for friend invites and presence
-- `EOS_Auth_Login` with `EOS_LCT_AccountPortal` (full Epic login) or `EOS_LCT_DeviceID` (auto-login for dev)
-- Title storage for player preferences
+- Social Overlay (Shift+F2) for friend invites and presence
+- Auth: `HAuth.login_async()` with DeviceID (dev) or Epic Account Portal (prod)
+- Voice chat via EOS RTC (optional, for team coordination)
+- Use `BucketId` on lobbies for regional grouping (reduces latency)
+- `HP2P.set_relay_control(EOS.P2P.RelayControl.AllowRelays)` — NAT traversal works out of the box
 
 **Verify**: Player launches → "Sign in with Epic" → lobby browser → join friend → connected via EOS P2P → gameplay identical to Phase 3
 
@@ -107,14 +112,15 @@ Develop with ENet (no config, instant iteration), swap to EOS P2P in Phase 4 wit
 
 ## Timeline
 
-| Phase | Scope | New files | Files touched | Est. |
+| Phase | Scope | Status | New files | Files touched |
 |---|---|---|---|---|
-| **1** | Network infra + player sync | 3 | 5 | ~2 days |
-| **2** | Deterministic world sync | 0 | 4 | ~1 day |
-| **3** | Combat, zombies, collectibles | 1 | 9 | ~4 days |
-| **4** | EOS auth, lobbies, P2P | 3 | 3 | ~3 days |
+| **1** | Network infra + player sync | ✅ Complete | — | `network_manager.gd`, `main_menu.gd`, `player.tscn`, `player.gd`, `survival.gd` |
+| **2** | Deterministic world sync | ✅ Complete | — | `world_generator.gd`, `survival.gd` |
+| **3** | Combat, zombies, collectibles | ✅ Complete | — | `enemy.gd`, `enemy.tscn`, `enemy_manager.gd`, `bow.gd`, `sword_slash.gd`, `ultimate.gd`, `arrow.gd`, `collectible_manager.gd` |
+| **3.5** | Networking cleanup + EOS readiness | ✅ Complete | — | `network_manager.gd`, `main_menu.gd`, `player.tscn`, `enemy.tscn`, `enemy.gd`, `enemy_manager.gd`, `survival.gd`, `networking.md` |
+| **4** | EOS auth, lobbies, P2P | 📋 Ready to implement | `eos_auth.gd`, `eos_lobby.gd` | `network_manager.gd`, `main_menu.gd`, `survival.gd` |
 
-**Total**: ~10 days working multiplayer → ~3 more for EOS on top.
+**Networking is fully functional for LAN play.** EOS integration is the final step for internet play.
 
 ---
 

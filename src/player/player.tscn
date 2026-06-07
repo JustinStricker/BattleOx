@@ -86,7 +86,6 @@ script = ExtResource("4_wingsx")
 [node name="Ultimate" type="Node3D" parent="Camera3D"]
 script = ExtResource("5_ultimx")
 
-[node name="StateSync" type="MultiplayerSynchronizer" parent="."]
-root_path = NodePath("..")
-replication_interval = 0.05
-replication_config = SubResource("SceneReplicationConfig_xjnkq")
+# StateSync removed — player sync is handled by RPCs (_sync_authoritative_state)
+# for future client-side prediction and reconciliation support.
+# Enemy and collectible sync still use MultiplayerSynchronizer where appropriate.

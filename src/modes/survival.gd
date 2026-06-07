@@ -96,6 +96,9 @@ func _client_setup() -> void:
 	add_child(loading)
 	loading.update("Receiving world...", 0.0)
 
+	# enemy_mgr is created here but world_gen is set later in send_world_config
+	# after the host sends the seed. Client enemy_mgr won't spawn enemies
+	# (only the server spawns), but it needs world_gen for any potential lookups.
 	enemy_mgr = EnemyManager.new()
 	enemy_mgr.name = "EnemyManager"
 	add_child(enemy_mgr)
@@ -166,6 +169,11 @@ func send_world_config(seed_val: int, w_size: float, w_level: float, spawn_pos: 
 	world_gen.world_size = w_size
 	world_gen.water_level = w_level
 	add_child(world_gen)
+
+	# Now that world_gen exists, give it to enemy_mgr so it won't crash on any lookups.
+	if enemy_mgr:
+		enemy_mgr.world_gen = world_gen
+
 	await get_tree().process_frame
 
 	var loading := get_node_or_null("LoadingScreen")

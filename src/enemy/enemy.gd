@@ -181,13 +181,8 @@ func _attack_fx() -> void:
 	AudioManager.play_enemy_attack()
 
 
-# Syncs enemy health to client replicas so health bars display correctly.
-# Called by the server after take_damage.
-@rpc("authority", "call_remote", "unreliable")
-func _sync_enemy_health(hp: int) -> void:
-	if multiplayer.multiplayer_peer == null or multiplayer.is_server():
-		return
-	health.current_health = hp
+# Enemy health is synced via MultiplayerSynchronizer (HealthComponent:current_health).
+# No manual health RPC needed.
 
 
 func _on_damaged(_amount: int, _knockback: bool) -> void:
@@ -198,11 +193,10 @@ func _on_damaged(_amount: int, _knockback: bool) -> void:
 		parent = get_tree().current_scene as Node3D
 	parent.add_child(fx)
 	fx.global_position = global_position + Vector3.UP * 0.5
+	# Health is synced automatically via MultiplayerSynchronizer (HealthComponent:current_health).
+	# Only the hit visual effect needs a manual RPC since it's a one-shot event.
 	if multiplayer.multiplayer_peer != null:
 		rpc("_hit_fx", global_position)
-		# Broadcast health to clients so health bars update on replicas
-		if multiplayer.is_server():
-			rpc("_sync_enemy_health", health.current_health)
 
 
 func _on_death() -> void:
