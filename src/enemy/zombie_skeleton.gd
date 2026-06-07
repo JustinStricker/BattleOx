@@ -23,6 +23,17 @@ var _hunch_offset: float = 0.0
 var _arm_length_mult: float = 1.0
 var _leg_style: ZombieType.LegStyle = ZombieType.LegStyle.HUMANOID
 
+var _flinch_timer: float = 0.0
+var _flinch_intensity: float = 0.0
+var _flash_timer: float = 0.0
+var _original_emission: Color = Color.BLACK
+var _original_emission_energy: float = 0.0
+var _target_direction: Vector3 = Vector3.FORWARD
+var _is_dying: bool = false
+var _zombie_type_ref: ZombieType = null
+var _surprise_anim_time: float = 0.0
+signal death_animation_finished
+
 static var _mesh_cache: Dictionary = {}
 
 
@@ -36,6 +47,9 @@ func build(type: ZombieType, scale_val: float) -> void:
 
 	_body_mat = _create_body_mat(type)
 	_eye_mat = _create_eye_mat()
+	_original_emission = type.emissive_color
+	_original_emission_energy = type.emissive_strength
+	_zombie_type_ref = type
 
 	if _mesh_cache.has(type.resource_path):
 		var cached: Node3D = _mesh_cache[type.resource_path] as Node3D
@@ -92,12 +106,22 @@ func _build_from_scratch(type: ZombieType) -> void:
 	_build_arms(type)
 	_build_legs(type)
 	_build_eyes()
+	if type.extra_eyes > 0:
+		_build_extra_eyes(type)
+	if type.jaw_style != ZombieType.JawStyle.NONE:
+		_build_jaw(type)
+	if type.neck_ring:
+		_build_neck_ring(type)
 	if type.spike_size > 0.001:
 		_build_spikes(type)
 	if type.claw_length > 0.001:
 		_build_claws(type)
 	if type.horn_length > 0.001 and type.head_style == ZombieType.HeadStyle.HORNED:
 		_build_horns(type)
+	if type.armor_plates:
+		_build_armor_plates(type)
+	if type.spine_extension > 0.001:
+		_build_spine_extension(type)
 
 
 func _apply_materials_to_limbs() -> void:
@@ -127,10 +151,11 @@ func _build_torso(_type: ZombieType) -> void:
 
 	var segs: int = 8
 	var h: float = 0.45
-	var w_top: float = 0.35
-	var w_bot: float = 0.18
-	var d_top: float = 0.2
-	var d_bot: float = 0.14
+	var width_mult: float = _type.torso_width_mult
+	var w_top: float = 0.35 * width_mult
+	var w_bot: float = 0.18 * width_mult
+	var d_top: float = 0.2 * width_mult
+	var d_bot: float = 0.14 * width_mult
 
 	for i in segs:
 		var a0: float = float(i) / segs * TAU
@@ -275,7 +300,6 @@ func _build_skull_head(pivot: Node3D) -> void:
 	pivot.add_child(head_mesh)
 
 	_build_brow_ridge(pivot)
-	_build_jaw(pivot)
 
 
 func _build_brow_ridge(pivot: Node3D) -> void:
@@ -289,19 +313,6 @@ func _build_brow_ridge(pivot: Node3D) -> void:
 	brow.scale = Vector3(1, 1, 0.3)
 	brow.material_override = _body_mat
 	pivot.add_child(brow)
-
-
-func _build_jaw(pivot: Node3D) -> void:
-	var jaw: MeshInstance3D = MeshInstance3D.new()
-	jaw.mesh = CylinderMesh.new()
-	(jaw.mesh as CylinderMesh).top_radius = 0.02
-	(jaw.mesh as CylinderMesh).bottom_radius = 0.01
-	(jaw.mesh as CylinderMesh).height = 0.05
-	jaw.position = Vector3(0, -0.05, -0.06)
-	jaw.rotation.x = deg_to_rad(20)
-	jaw.scale = Vector3(0.8, 1, 0.4)
-	jaw.material_override = _body_mat
-	pivot.add_child(jaw)
 
 
 func _build_horns(type: ZombieType) -> void:
@@ -387,10 +398,18 @@ func _build_spikes(type: ZombieType) -> void:
 func _build_arms(type: ZombieType) -> void:
 	var torso_w: float = 0.3
 	var torso_h: float = 0.4
-	var arm_len: float = 0.3 * type.arm_length_mult
 	var arm_r: float = type.arm_radius
 
 	for side in [-1, 1]:
+		# Support asymmetric arm lengths (-1 = use default arm_length_mult)
+		var len_mult: float = type.arm_length_mult
+		if side > 0 and type.arm_length_mult_right >= 0.0:
+			len_mult = type.arm_length_mult_right
+		elif side < 0 and type.arm_length_mult_right >= 0.0:
+			# Left arm uses the primary mult when asymmetric is set
+			len_mult = type.arm_length_mult
+		var arm_len: float = 0.3 * len_mult
+
 		var shoulder: Vector3 = Vector3(side * torso_w * 1.1, torso_h * 0.8, 0)
 		var elbow: Vector3 = shoulder + Vector3(side * 0.05, -arm_len * 0.5, 0)
 		var hand: Vector3 = elbow + Vector3(side * 0.05, -arm_len * 0.5, 0)
@@ -520,16 +539,41 @@ func _make_limb_segment(st: SurfaceTool, p0: Vector3, p1: Vector3, r0: float, r1
 			st.add_vertex(data[0] as Vector3)
 
 
-func update_animation(delta: float, is_moving: bool, is_attacking: bool, is_surprised: bool, speed: float) -> void:
+func update_animation(delta: float, is_moving: bool, is_attacking: bool, is_surprised: bool, speed: float, target_dir: Vector3 = Vector3.FORWARD) -> void:
 	_anim_time += delta
+	_target_direction = target_dir
 
-	if is_attacking:
+	# Decay flinch recoil
+	if _flinch_timer > 0.0:
+		_flinch_timer = max(_flinch_timer - delta, 0.0)
+
+	# Decay hit flash emission
+	if _flash_timer > 0.0:
+		_flash_timer = max(_flash_timer - delta, 0.0)
+		if _flash_timer <= 0.0 and _body_mat:
+			_body_mat.emission = _original_emission
+			_body_mat.emission_energy_multiplier = _original_emission_energy
+
+	if _is_dying:
+		return
+
+	if is_surprised:
+		_surprise_anim_time += delta
+		_animate_surprise(delta)
+	elif is_attacking:
 		_attack_anim_timer += delta
 		_animate_attack()
-	elif is_moving and not is_surprised:
+	elif is_moving:
+		_surprise_anim_time = 0.0
 		_animate_walk(delta, speed)
 	else:
+		_surprise_anim_time = 0.0
 		_animate_idle(delta)
+
+	# Apply flinch recoil lean on top of current animation
+	if _flinch_timer > 0.0:
+		var flinch_t := _flinch_timer / 0.15
+		_torso.rotation.x += _flinch_intensity * 0.4 * flinch_t
 
 	pulse_eyes(delta)
 
@@ -551,6 +595,8 @@ func _animate_idle(_delta: float) -> void:
 	var breath: float = sin(_anim_time * 2.5) * 0.015
 	var base_y: float = 0.2 - _hunch_offset
 	_torso.position.y = base_y + breath
+	_torso.position.x = 0.0
+	_torso.rotation.x = 0.0
 
 	var twitch: float = sin(_anim_time * 7.3) * 0.015 + sin(_anim_time * 11.7) * 0.01
 	var sway: float = sin(_anim_time * 0.6) * 0.04
@@ -569,16 +615,21 @@ func _animate_idle(_delta: float) -> void:
 	_head_pivot.rotation.x = sin(_anim_time * 6.7) * 0.03
 
 
-func _animate_walk(_delta: float, speed: float) -> void:
-	var freq: float = clamp(speed * 2.5, 3.0, 8.0)
+func _animate_walk(delta: float, speed: float) -> void:
+	var cadence_mult: float = _zombie_type_ref.walk_cadence_mult if _zombie_type_ref else 1.0
+	var freq: float = clamp(speed * 2.5 * cadence_mult, 3.0, 10.0)
 	var phase: float = _anim_time * freq
 
 	var arm_swing: float = clamp(speed * 0.3, 0.35, 0.8)
 	var leg_swing: float = clamp(speed * 0.22, 0.22, 0.55)
 
 	var base_y: float = 0.2 - _hunch_offset
-	var bob: float = abs(sin(phase * 0.5)) * 0.008 * speed
+	# Boosted body bob for more visible movement
+	var bob: float = abs(sin(phase * 0.5)) * 0.02 * speed
+	# Lateral sway side-to-side
+	var lateral_sway: float = sin(phase * 0.5) * 0.005 * speed
 	_torso.position.y = base_y + bob
+	_torso.position.x = lateral_sway
 
 	var is_digi: bool = _leg_style == ZombieType.LegStyle.DIGITIGRADE
 
@@ -602,6 +653,12 @@ func _animate_walk(_delta: float, speed: float) -> void:
 
 	if is_digi:
 		_torso.rotation.x = sin(phase) * 0.03
+	else:
+		_torso.rotation.x = 0.0
+
+	# Forward lean from zombie type (Brute leans slightly, Runner leans more)
+	var lean: float = _zombie_type_ref.torso_lean_forward if _zombie_type_ref else 0.0
+	_torso.rotation.x += lean
 
 	_head_pivot.rotation.y = 0.0
 
@@ -611,24 +668,219 @@ func set_attack_timer(val: float) -> void:
 
 
 func _animate_attack() -> void:
+	var windup_ratio: float = _zombie_type_ref.attack_windup_ratio if _zombie_type_ref else 0.4
+	var recover_ratio: float = _zombie_type_ref.attack_recover_ratio if _zombie_type_ref else 0.3
+	var strike_start: float = windup_ratio
+	var strike_end: float = strike_start + (1.0 - windup_ratio - recover_ratio)
+
 	var t: float = _attack_anim_timer / ATTACK_COOLDOWN
 	t = clamp(t, 0.0, 1.0)
 
-	if t < 0.4:
-		var r: float = t / 0.4
+	if t < strike_start:
+		# Wind-up: arms pull back, torso leans back
+		var r: float = t / strike_start
 		_set_limb_rotation(lerp(0.8, 0.05, r), lerp(0.6, 0.05, r), 0.0, 0.0)
 		_torso.rotation.x = lerp(-0.2, 0.0, r)
 		_head_pivot.rotation.x = lerp(0.15, 0.0, r)
-	elif t < 0.7:
-		var r: float = (t - 0.4) / 0.3
+	elif t < strike_end:
+		# Strike: arms swing forward, torso lunges
+		var r: float = (t - strike_start) / (strike_end - strike_start)
 		_set_limb_rotation(lerp(0.05, -0.8, r), lerp(0.05, -0.5, r), 0.0, 0.0)
 		_torso.rotation.x = lerp(0.0, 0.15, r)
 		_head_pivot.rotation.x = lerp(0.0, -0.2, r)
 	else:
-		var r: float = (t - 0.7) / 0.3
+		# Recover: arms and torso return to ready
+		var r: float = (t - strike_end) / recover_ratio
 		_set_limb_rotation(lerp(-0.8, 0.6, r), lerp(-0.5, 0.4, r), 0.0, 0.0)
 		_torso.rotation.x = lerp(0.15, -0.1, r)
 		_head_pivot.rotation.x = lerp(-0.2, 0.1, r)
+
+
+func play_hit_flinch() -> void:
+	_flinch_timer = 0.15
+	_flinch_intensity = 1.0
+	if _zombie_type_ref:
+		_flinch_intensity = _zombie_type_ref.flinch_strength
+	_flash_body()
+
+
+func _flash_body() -> void:
+	if _body_mat:
+		_body_mat.emission_enabled = true
+		_body_mat.emission = Color.WHITE
+		_body_mat.emission_energy_multiplier = 3.0
+		_flash_timer = 0.12
+
+
+func _animate_surprise(_delta: float) -> void:
+	var t: float = clamp(_surprise_anim_time / 0.2, 0.0, 1.0)
+	# Arms raise up in alert pose
+	if _pivot_arm_l:
+		_pivot_arm_l.rotation.x = lerp(0.3, -0.5, t)
+		_pivot_arm_r.rotation.x = lerp(0.3, -0.5, t)
+		_pivot_forearm_l.rotation.x = lerp(0.1, -0.3, t)
+		_pivot_forearm_r.rotation.x = lerp(0.1, -0.3, t)
+	# Head snaps forward/down
+	_head_pivot.rotation.x = lerp(0.0, -0.15, t)
+	_head_pivot.rotation.y = 0.0
+	# Slight torso recoil (startled lean back)
+	_torso.position.y = 0.2 - _hunch_offset
+	_torso.rotation.x = lerp(0.0, 0.1, t)
+	# Legs stay planted
+	if _pivot_leg_l:
+		_pivot_leg_l.rotation.x = 0.0
+		_pivot_leg_r.rotation.x = 0.0
+
+
+func play_death_animation() -> void:
+	_is_dying = true
+	var collapse_time: float = 0.4
+	if _zombie_type_ref:
+		collapse_time = _zombie_type_ref.death_collapse_time
+
+	# Torso collapses forward and drops
+	var dt: Tween = create_tween().set_parallel(true)
+	dt.tween_property(_torso, "rotation:x", 0.8, collapse_time).set_ease(Tween.EASE_IN)
+	dt.tween_property(_torso, "position:y", _torso.position.y - 0.15, collapse_time).set_ease(Tween.EASE_IN)
+	# Arms go limp (drop forward/down)
+	if _pivot_arm_l:
+		dt.tween_property(_pivot_arm_l, "rotation:x", 0.5, collapse_time * 0.8)
+		dt.tween_property(_pivot_arm_r, "rotation:x", 0.5, collapse_time * 0.8)
+		dt.tween_property(_pivot_forearm_l, "rotation:x", 0.3, collapse_time * 0.8)
+		dt.tween_property(_pivot_forearm_r, "rotation:x", 0.3, collapse_time * 0.8)
+	# Head drops
+	if _head_pivot:
+		dt.tween_property(_head_pivot, "rotation:x", 0.4, collapse_time * 0.6)
+
+	# Emit signal after collapse completes
+	var done_tween: Tween = create_tween()
+	done_tween.tween_interval(collapse_time + 0.05)
+	done_tween.tween_callback(func(): death_animation_finished.emit())
+
+
+func _build_jaw(type: ZombieType) -> void:
+	if not _head_pivot:
+		return
+	match type.jaw_style:
+		ZombieType.JawStyle.HANGING:
+			# Dangling jaw — thin cylinder hanging down from skull base
+			var jaw: MeshInstance3D = MeshInstance3D.new()
+			jaw.mesh = CylinderMesh.new()
+			(jaw.mesh as CylinderMesh).top_radius = 0.022
+			(jaw.mesh as CylinderMesh).bottom_radius = 0.012
+			(jaw.mesh as CylinderMesh).height = 0.08
+			jaw.position = Vector3(0, -0.1, -0.04)
+			jaw.rotation.x = deg_to_rad(25)
+			jaw.scale = Vector3(0.7, 1, 0.35)
+			jaw.material_override = _body_mat
+			_head_pivot.add_child(jaw)
+			# Small lower teeth row
+			for ti in 3:
+				var tooth: MeshInstance3D = MeshInstance3D.new()
+				tooth.mesh = CylinderMesh.new()
+				(tooth.mesh as CylinderMesh).top_radius = 0.005
+				(tooth.mesh as CylinderMesh).bottom_radius = 0.003
+				(tooth.mesh as CylinderMesh).height = 0.025
+				tooth.position = Vector3((ti - 1) * 0.015, -0.14, -0.05)
+				tooth.rotation.x = deg_to_rad(25)
+				tooth.material_override = _body_mat
+				_head_pivot.add_child(tooth)
+		ZombieType.JawStyle.TUSK:
+			# Two large downward-curving tusks
+			for side in [-1, 1]:
+				var tusk: MeshInstance3D = MeshInstance3D.new()
+				tusk.mesh = CylinderMesh.new()
+				(tusk.mesh as CylinderMesh).top_radius = 0.018
+				(tusk.mesh as CylinderMesh).bottom_radius = 0.0
+				(tusk.mesh as CylinderMesh).height = 0.15
+				tusk.position = Vector3(side * 0.06, -0.08, -0.03)
+				tusk.rotation.x = deg_to_rad(-15)
+				tusk.rotation.z = deg_to_rad(side * 20)
+				tusk.material_override = _body_mat
+				_head_pivot.add_child(tusk)
+
+
+func _build_extra_eyes(type: ZombieType) -> void:
+	var torso_h: float = 0.4
+	var head_r: float = 0.12
+	var head_cy: float = torso_h + head_r * 0.8
+	# Place extra eyes flanking the main pair, slightly higher and wider
+	for i in type.extra_eyes:
+		var side: float = 1.0 if i % 2 == 0 else -1.0
+		var row: float = floori(float(i) / 2.0)
+		var eye: MeshInstance3D = MeshInstance3D.new()
+		eye.mesh = SphereMesh.new()
+		(eye.mesh as SphereMesh).radius = 0.025
+		(eye.mesh as SphereMesh).height = 0.05
+		(eye.mesh as SphereMesh).material = _eye_mat
+		eye.position = Vector3(
+			side * -0.1,
+			head_cy + head_r * 0.35 + row * 0.03,
+			-head_r * 0.82
+		)
+		_torso.add_child(eye)
+
+
+func _build_neck_ring(type: ZombieType) -> void:
+	# Thick collar/neck geometry around the base of the head
+	var torso_h: float = 0.4
+	var ring: MeshInstance3D = MeshInstance3D.new()
+	ring.mesh = TorusMesh.new()
+	(ring.mesh as TorusMesh).inner_radius = 0.06
+	(ring.mesh as TorusMesh).outer_radius = 0.1
+	ring.mesh = CylinderMesh.new()
+	(ring.mesh as CylinderMesh).top_radius = 0.12
+	(ring.mesh as CylinderMesh).bottom_radius = 0.14
+	(ring.mesh as CylinderMesh).height = 0.06
+	ring.position = Vector3(0, torso_h + 0.05, 0)
+	ring.scale = Vector3(1, 1, 0.8)
+	ring.material_override = _body_mat
+	_torso.add_child(ring)
+
+
+func _build_armor_plates(type: ZombieType) -> void:
+	# Shoulder pauldron-like plates
+	var torso_w: float = 0.3
+	var torso_h: float = 0.4
+	for side in [-1, 1]:
+		var plate: MeshInstance3D = MeshInstance3D.new()
+		plate.mesh = BoxMesh.new()
+		(plate.mesh as BoxMesh).size = Vector3(0.12, 0.04, 0.15)
+		plate.position = Vector3(side * torso_w * 1.05, torso_h * 0.9, 0)
+		plate.rotation.z = deg_to_rad(side * -12)
+		plate.rotation.x = deg_to_rad(-5)
+		plate.material_override = _body_mat
+		_torso.add_child(plate)
+
+	# Back armor plates (2-3 stacked)
+	for i in 3:
+		var bplate: MeshInstance3D = MeshInstance3D.new()
+		bplate.mesh = BoxMesh.new()
+		(bplate.mesh as BoxMesh).size = Vector3(0.22 - i * 0.03, 0.035, 0.1)
+		bplate.position = Vector3(0, torso_h * 0.85 - i * 0.06, 0.18 + i * 0.02)
+		bplate.rotation.x = deg_to_rad(8 + i * 3)
+		bplate.material_override = _body_mat
+		_torso.add_child(bplate)
+
+
+func _build_spine_extension(type: ZombieType) -> void:
+	# Extends spine past the torso base — tail-like vertebrae
+	var torso_h: float = 0.4
+	var ext_len: float = type.spine_extension
+	var vert_count: int = maxi(3, int(ext_len * 15.0))
+	for i in vert_count:
+		var t: float = float(i) / float(vert_count)
+		var ridge: MeshInstance3D = MeshInstance3D.new()
+		ridge.mesh = SphereMesh.new()
+		var r: float = lerp(0.025, 0.01, t)
+		(ridge.mesh as SphereMesh).radius = r
+		(ridge.mesh as SphereMesh).height = r * 2.0
+		var z_off: float = 0.2 + t * ext_len * 0.8
+		var y_off: float = -torso_h * 0.45 - t * ext_len * 0.3
+		ridge.position = Vector3(0, y_off, z_off)
+		ridge.scale = Vector3(1, 0.3, 0.6)
+		ridge.material_override = _body_mat
+		_torso.add_child(ridge)
 
 
 func pulse_eyes(_delta: float) -> void:

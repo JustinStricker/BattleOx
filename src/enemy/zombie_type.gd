@@ -3,6 +3,7 @@ class_name ZombieType
 
 enum HeadStyle { ROUND, SKULL, HORNED }
 enum LegStyle { HUMANOID, DIGITIGRADE }
+enum JawStyle { NONE, HANGING, TUSK }
 
 @export var type_name: String = "Shambler"
 @export var health: int = 20
@@ -28,3 +29,19 @@ enum LegStyle { HUMANOID, DIGITIGRADE }
 @export var emissive_strength: float = 0.5
 @export var roughness: float = 0.9
 @export var metallic: float = 0.0
+
+@export var attack_windup_ratio: float = 0.4
+@export var attack_recover_ratio: float = 0.3
+@export var walk_cadence_mult: float = 1.0
+@export var torso_lean_forward: float = 0.0
+@export var flinch_strength: float = 1.0
+@export var death_collapse_time: float = 0.4
+
+# --- Visual Redesign Parameters ---
+@export var arm_length_mult_right: float = -1.0  # -1 = symmetric (use arm_length_mult)
+@export var jaw_style: JawStyle = JawStyle.NONE
+@export var extra_eyes: int = 0
+@export var armor_plates: bool = false
+@export var spine_extension: float = 0.0
+@export var torso_width_mult: float = 1.0
+@export var neck_ring: bool = false

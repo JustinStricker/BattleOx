@@ -73,6 +73,9 @@ func _pick_type_and_build() -> void:
 func _apply_type_to_ai() -> void:
 	ai.speed_multiplier = zombie_type.speed_multiplier
 	ai.zombie_damage = zombie_type.damage
+	# Scale attack range proportionally to body size
+	var scale_factor := skeleton.body_scale / 5.0
+	ai.attack_range = ATTACK_RANGE * scale_factor
 
 
 func _resize_collision() -> void:
@@ -114,7 +117,10 @@ func _physics_process(delta: float) -> void:
 		skeleton.set_attack_timer(ATTACK_COOLDOWN - ai.attack_timer)
 	_prev_ai_state = st
 
-	skeleton.update_animation(delta, is_moving, is_attacking, ai.is_surprised(), speed)
+	var target_dir := Vector3.FORWARD
+	if perception.target and is_instance_valid(perception.target):
+		target_dir = (perception.target.global_position - global_position).normalized()
+	skeleton.update_animation(delta, is_moving, is_attacking, ai.is_surprised(), speed, target_dir)
 
 	movement.apply_gravity_and_slide(delta)
 
@@ -143,7 +149,7 @@ func _on_ai_attack(target: Node3D, damage: int) -> void:
 		rpc("_attack_fx")
 	if is_instance_valid(target) and target.has_method("take_damage"):
 		var dist := global_position.distance_to(target.global_position)
-		if dist < ATTACK_RANGE + 0.5:
+		if dist < ai.attack_range + 0.5:
 			target.take_damage(damage)
 
 
@@ -187,6 +193,7 @@ func _attack_fx() -> void:
 
 func _on_damaged(_amount: int, _knockback: bool) -> void:
 	AudioManager.play_enemy_hit()
+	skeleton.play_hit_flinch()
 	var fx := preload("res://src/enemy/effects/hit_fx.tscn").instantiate()
 	var parent: Node3D = get_parent() as Node3D
 	if not parent:
@@ -219,9 +226,13 @@ func _on_death() -> void:
 
 	_shake_camera(0.06, 0.35)
 
-	visible = false
-	died.emit(pos)
-	queue_free()
+	# Play death collapse animation, then clean up
+	skeleton.play_death_animation()
+	skeleton.death_animation_finished.connect(func():
+		visible = false
+		died.emit(pos)
+		queue_free()
+	, CONNECT_ONE_SHOT)
 
 
 func _shake_camera(amount: float, duration: float) -> void:
