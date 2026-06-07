@@ -74,7 +74,6 @@ func get_forest(x: float, z: float) -> float:
 func get_biome(x: float, z: float) -> Biome:
 	var elev := get_elevation(x, z)
 	var moist := get_moisture(x, z)
-	var temp := get_temperature(x, z)
 
 	if elev < -0.15:
 		return Biome.OCEAN

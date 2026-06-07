@@ -387,6 +387,16 @@ Root (bootstrap.tscn — Node3D)
 4. Press **F5** (Run Project) to play.
 5. No external assets, plugins, or dependencies required.
 
+### GDScript Warning Check
+
+Run this before Play to surface all compile-time warnings in `godot.log`:
+
+```bash
+godot -d -s validate.gd 2>&1 | tee -a godot.log
+```
+
+Warnings normally only appear in the editor Debugger panel. This script elevates all warnings to Error level, forces every `.gd` file to compile, and prints results to stdout (captured to `godot.log` by `tee`).
+
 ---
 
 ## File Reference (Every `.gd` File)

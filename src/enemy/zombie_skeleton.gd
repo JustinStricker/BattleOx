@@ -121,7 +121,7 @@ func _apply_materials_to_limbs() -> void:
 				(child as MeshInstance3D).material_override = _eye_mat
 
 
-func _build_torso(type: ZombieType) -> void:
+func _build_torso(_type: ZombieType) -> void:
 	var st: SurfaceTool = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 

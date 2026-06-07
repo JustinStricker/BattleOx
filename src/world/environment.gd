@@ -16,9 +16,9 @@ func _ready() -> void:
 	_scatter_trees()
 	_scatter_foliage()
 
-func _poisson_disk_sample(half_size: float, min_dist: float, seed: int, max_attempts: int = 30) -> Array[Vector2]:
+func _poisson_disk_sample(half_size: float, min_dist: float, rng_seed: int, max_attempts: int = 30) -> Array[Vector2]:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
+	rng.seed = rng_seed
 	var radius := min_dist
 	var cell_size := radius / sqrt(2.0)
 	var grid_width := ceili(half_size * 2.0 / cell_size)
@@ -63,7 +63,6 @@ func _poisson_disk_sample(half_size: float, min_dist: float, seed: int, max_atte
 
 func _terrain_slope(x: float, z: float) -> float:
 	var step := 1.0
-	var h := world_gen.get_height(x, z)
 	var hx1 := world_gen.get_height(x + step, z)
 	var hx2 := world_gen.get_height(x - step, z)
 	var hz1 := world_gen.get_height(x, z + step)

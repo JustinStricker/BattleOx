@@ -101,11 +101,10 @@ func _finish_chunk(key: Vector2i, arrays: Array) -> void:
 
 func _get_chunk_from_pool() -> TerrainChunk:
 	if _chunk_pool.is_empty():
-		var chunk := TerrainChunk.new()
-		add_child(chunk)
-		return chunk
-	var chunk: TerrainChunk = _chunk_pool.pop_back()
-	return chunk
+		var new_chunk := TerrainChunk.new()
+		add_child(new_chunk)
+		return new_chunk
+	return _chunk_pool.pop_back()
 
 func _recycle_chunk(chunk: TerrainChunk) -> void:
 	chunk.visible = false

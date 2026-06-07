@@ -113,13 +113,11 @@ func _shake_camera(amount: float, duration: float) -> void:
 	var orig_rot_x := camera.rotation.x
 	var orig_rot_y := camera.rotation.y
 	var tween := create_tween()
-	var elapsed := 0.0
-	tween.tween_method(func(_v: Variant):
-		elapsed += get_process_delta_time()
+	tween.tween_method(func(progress: float):
 		if not is_instance_valid(camera):
 			tween.kill()
 			return
-		var decay: float = max(1.0 - elapsed / duration, 0.0)
+		var decay: float = max(1.0 - progress, 0.0)
 		camera.rotation.x = orig_rot_x + randf_range(-amount, amount) * decay
 		camera.rotation.y = orig_rot_y + randf_range(-amount, amount) * decay
 	, 0.0, 1.0, duration)

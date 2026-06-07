@@ -108,14 +108,14 @@ func _ready() -> void:
 		jump_landed.connect(wings.land)
 
 
-func _show_character_mesh(show: bool) -> void:
+func _show_character_mesh(visible_state: bool) -> void:
 	var torso := get_node_or_null("Torso")
 	var head := get_node_or_null("Head")
 	var el := get_node_or_null("LeftEye")
 	var er := get_node_or_null("RightEye")
 	for part in [torso, head, el, er]:
 		if part:
-			part.visible = show
+			part.visible = visible_state
 
 
 func _setup_blink_effects() -> void:

@@ -2,7 +2,7 @@ class_name PerceptionComponent
 extends Node
 
 @export var target_group: String = "player"
-@export var range: float = 18.0
+@export var detect_range: float = 18.0
 @export var raycast_height_offset: float = 1.0
 
 var target: Node3D = null

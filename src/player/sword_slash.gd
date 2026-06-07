@@ -286,13 +286,11 @@ func _shake_camera(amount: float, duration: float) -> void:
 	var orig_rot_x: float = camera.rotation.x
 	var orig_rot_y: float = camera.rotation.y
 	var tween: Tween = create_tween()
-	var elapsed: float = 0.0
-	tween.tween_method(func(_v: Variant):
-		elapsed += get_process_delta_time()
+	tween.tween_method(func(progress: float):
 		if not is_instance_valid(camera):
 			tween.kill()
 			return
-		var decay: float = max(1.0 - elapsed / duration, 0.0)
+		var decay: float = max(1.0 - progress, 0.0)
 		camera.rotation.x = orig_rot_x + randf_range(-amount, amount) * decay
 		camera.rotation.y = orig_rot_y + randf_range(-amount, amount) * decay
 	, 0.0, 1.0, duration)
@@ -413,8 +411,6 @@ func _play_slash_animation() -> void:
 	_particles.emitting = true
 	_sparks.emitting = true
 	_flash_light.visible = true
-
-	var total_sweep := SLASH_DURATION + SHEATHE_DURATION
 
 	tween.tween_property(sword_meshes, "position", END_POS, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(sword_meshes, "rotation:x", END_ROT.x, SLASH_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)

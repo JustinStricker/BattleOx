@@ -76,9 +76,9 @@ func _ready() -> void:
 	_dark = StandardMaterial3D.new()
 	_dark.albedo_color = Color(0.35, 0.2, 0.08)
 	_dark.roughness = 0.85
-	var wrap: StandardMaterial3D = StandardMaterial3D.new()
-	wrap.albedo_color = Color(0.15, 0.1, 0.08)
-	wrap.roughness = 0.9
+	var wrap_mat: StandardMaterial3D = StandardMaterial3D.new()
+	wrap_mat.albedo_color = Color(0.15, 0.1, 0.08)
+	wrap_mat.roughness = 0.9
 
 	# Glowing rune material
 	_rune_mat = StandardMaterial3D.new()
@@ -117,7 +117,7 @@ func _ready() -> void:
 	grip.mesh.top_radius = 0.065
 	grip.mesh.bottom_radius = 0.065
 	grip.mesh.height = 0.12
-	grip.mesh.material = wrap
+	grip.mesh.material = wrap_mat
 	grip.position = Vector3(0, -0.02, 0)
 	add_child(grip)
 
@@ -271,8 +271,8 @@ func _update_string(charge_t: float) -> void:
 func _position_string_segment(seg: MeshInstance3D, from: Vector3, to: Vector3) -> void:
 	var mid: Vector3 = (from + to) * 0.5
 	var dir: Vector3 = to - from
-	var len: float = dir.length()
-	if len < 0.001:
+	var length: float = dir.length()
+	if length < 0.001:
 		seg.visible = false
 		return
 	seg.visible = true
@@ -286,7 +286,7 @@ func _position_string_segment(seg: MeshInstance3D, from: Vector3, to: Vector3) -
 	var y: Vector3 = z.cross(x).normalized()
 	seg.transform.basis = Basis(x, y, z)
 	# Scale Z to match the distance (box is 1 unit long in Z)
-	seg.scale.z = len
+	seg.scale.z = length
 
 
 func _setup_muzzle_particles() -> void:

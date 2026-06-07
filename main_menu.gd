@@ -26,10 +26,10 @@ func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
-func _input_connect_state(visible: bool) -> void:
-	ip_label.visible = visible
-	ip_input.visible = visible
-	start_button.visible = visible
+func _input_connect_state(show_state: bool) -> void:
+	ip_label.visible = show_state
+	ip_input.visible = show_state
+	start_button.visible = show_state
 
 
 func _on_host_pressed() -> void:

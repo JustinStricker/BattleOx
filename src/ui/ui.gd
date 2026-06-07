@@ -365,14 +365,14 @@ func _draw_crosshair() -> void:
 	var size: Vector2 = crosshair_control.get_rect().size
 	var c: Vector2 = size / 2.0
 	var gap: float = 5.0
-	var len: float = 10.0
+	var length: float = 10.0
 	var t: float = 2.0
 	var col: Color = Color.WHITE
 	crosshair_control.draw_rect(Rect2(c.x - 0.5, c.y - 0.5, 1.0, 1.0), col)
-	crosshair_control.draw_rect(Rect2(c.x - t / 2.0, c.y - gap - len, t, len), col)
-	crosshair_control.draw_rect(Rect2(c.x - t / 2.0, c.y + gap, t, len), col)
-	crosshair_control.draw_rect(Rect2(c.x - gap - len, c.y - t / 2.0, len, t), col)
-	crosshair_control.draw_rect(Rect2(c.x + gap, c.y - t / 2.0, len, t), col)
+	crosshair_control.draw_rect(Rect2(c.x - t / 2.0, c.y - gap - length, t, length), col)
+	crosshair_control.draw_rect(Rect2(c.x - t / 2.0, c.y + gap, t, length), col)
+	crosshair_control.draw_rect(Rect2(c.x - gap - length, c.y - t / 2.0, length, t), col)
+	crosshair_control.draw_rect(Rect2(c.x + gap, c.y - t / 2.0, length, t), col)
 
 
 func set_score(value: int) -> void:
