@@ -81,7 +81,50 @@
 ### Basic resources
 Wood, Stone, Cloth, Scrap Metal, Echo Shards, Gunpowder, Mushrooms, Diamond, Alcohol
 
-### Craftable consumables
+### Official Godot Systems Audit
+
+This section tracks which built-in Godot systems are used vs. where custom implementations exist that could be replaced with official alternatives.
+
+### ✅ Currently Using Official Systems (keep these)
+
+| Category | Godot System | Where Used |
+|---|---|---|
+| Procedural Mesh Generation | `SurfaceTool` + `ArrayMesh` | `environment.gd`, `dire_wolf_skeleton.gd`, `stone_golem_skeleton.gd`, `wraith_skeleton.gd`, `sword_slash.gd`, `wings.gd`, `death_explosion.gd`, `terrain_chunk.gd` |
+| Instanced Rendering | `MultiMesh` / `MultiMeshInstance3D` | Clouds (120 instances), Trees (oak/pine/swamp), Foliage (grass, bushes, flowers, mushrooms) — all in `environment.gd` |
+| Procedural Sky | `ProceduralSkyMaterial` + `Sky` | `environment.gd` — day/night sky dome |
+| GPU Visual Effects | `ShaderMaterial` (custom `.gdshader` files) | Terrain, water, clouds, wind foliage, beam effects |
+| Procedural Animation | `Tween` | Enemy deaths, sword slash, wings launch/sweep, camera shake, death explosion rings/flashes |
+| Seeded Randomness | `RandomNumberGenerator` | Tree/foliage scattering in `environment.gd` |
+| Physics Body | `RigidBody3D` | Death explosion debris chunks in `death_explosion.gd` |
+| Particles (CPU) | `CPUParticles3D` | Death explosion smoke, blood, mist in `death_explosion.gd` |
+| Particles (GPU) | `GPUParticles3D` | Sword slash trail/sparks, wings particle trails, death explosion fire/embers |
+
+### ❌ Custom Code That Could Be Replaced With Official Systems
+
+| Current Custom Approach | Official Godot Alternative | Files Affected | Priority |
+|---|---|---|---|
+| **Skeleton animation via raw Node3D pivot rotations** — enemy characters are built from `MeshInstance3D` + `Node3D` children, and all animation (walk, attack, flinch, death) is done by manually rotating these pivots in code. | `Skeleton3D` + `SkeletonModifier3D` — Use a proper `Skeleton3D` with bones, then apply procedural modifiers (IK, physics, constraints) on top. `SkeletonIK3D` for foot/hand placement. Bone attachments for mesh instances. | `enemy_skeleton.gd` base, `dire_wolf_skeleton.gd`, `stone_golem_skeleton.gd`, `wraith_skeleton.gd` | **High** — This is the biggest opportunity to replace custom code with Godot's built-in skeletal animation pipeline. |
+| **AnimationPlayer** — not used at all. All animation timing is manual (`_anim_time` accumulators, lerp calls). | `AnimationPlayer` + `AnimationTree` — Define animation clips (idle, walk, attack, death) with proper blend trees. Can still blend with procedural modifiers via `SkeletonModifier3D`. | All skeleton files, `sword_slash.gd`, `wings.gd` | **High** — Would simplify animation logic enormously. |
+| **No IK system** — enemies have no foot/hand IK. The dire wolf doesn't adjust foot placement on slopes, the stone golem's attack hit detection is based on timers not actual hand position. | `SkeletonIK3D` — Attach to hand/foot bones to solve IK in real-time. | `dire_wolf_skeleton.gd`, `stone_golem_skeleton.gd` | **Medium** — Would improve visual quality on terrain. |
+| **Ragdoll physics not used** — death animations are hand-animated tweens. | `PhysicalBone3D` — Enable physics on skeleton bones on death for procedural ragdoll collapses. | All skeleton files (death animation methods) | **Medium** — Would make deaths more dynamic with minimal code. |
+| **MeshDataTool not used** — but currently not needed. All geometry is generated fresh, not modified at runtime. | `MeshDataTool` — If runtime mesh deformation is ever needed (e.g. vertex-level damage, morphing). | N/A (future consideration) | **Low** — No current use case, but worth knowing. |
+| **ImmediateMesh not used** — no debug visualization. | `ImmediateMesh` — Useful for debug drawing (raycasts, paths, zones). | N/A (debugging only) | **Low** — Nice-to-have for the King of the Hill zone ring. |
+| **GridMap not used** — terrain is a single mesh chunk, no grid-based world. | `GridMap` — If the safehouse or world building ever needs grid-aligned placement. | N/A (future consideration) | **Low** — The safehouse could use this for block placement. |
+| **Path3D / PathFollow3D not used** — enemy spawns are random, no patrol paths. | `Path3D` + `PathFollow3D` — Could be used for zombie patrol routes or Boss movement paths. | N/A (future consideration) | **Low** — If predictable spawn routes become desired. |
+
+### 🔄 Recommended Migration Path
+
+1. **Phase 1 (Skeleton System)**: Refactor enemy skeletons to use `Skeleton3D` nodes with bone hierarchies instead of manual `Node3D` pivot trees. Each enemy type defines its bones, then attaches meshes to bones. Keep the procedural mesh generation (`SurfaceTool`/`ArrayMesh`) — that part is fine.
+
+2. **Phase 2 (Animation Clips)**: Create `AnimationPlayer` with named animations (idle, walk, attack, flinch, death). Use `AnimationTree` with blend spaces for smooth transitions based on speed/state.
+
+3. **Phase 3 (Procedural Modifiers)**: Add `SkeletonModifier3D` subclasses for procedural overlays (e.g. hit flinch, idle breathing, attack wind-up). These layer on top of base animations.
+
+4. **Phase 4 (IK & Physics)**: Add `SkeletonIK3D` for foot placement on terrain. Replace death tweens with `PhysicalBone3D` activation for ragdoll death.
+
+5. **Phase 5 (Debug & Polish)**: Use `ImmediateMesh` for King of the Hill zone visualizations and debug tools. Evaluate `GridMap` for safehouse block placement.
+
+## Craftable consumables
 | Item | Recipe | Effect |
 |---|---|---|
 | Bandage | 2 Cloth | Heal 25 HP |
