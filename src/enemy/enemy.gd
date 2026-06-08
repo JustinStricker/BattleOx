@@ -6,18 +6,17 @@ signal died(pos: Vector3)
 const FALL_KILL_HEIGHT: float = -10.0
 const DESPAWN_DISTANCE: float = 120.0
 const CHASE_RANGE: float = 18.0
-const ATTACK_RANGE: float = 1.8
 const ATTACK_COOLDOWN: float = 1.2
 
-@export var zombie_type: ZombieType
+@export var zombie_type: EnemyType
 
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
-@onready var skeleton: ZombieSkeleton = $ZombieSkeleton
 @onready var health: HealthComponent = $HealthComponent
 @onready var perception: PerceptionComponent = $PerceptionComponent
 @onready var movement: MovementComponent = $MovementComponent
 @onready var ai: AIStateMachine = $AIStateMachine
 
+var skeleton: EnemySkeleton
 var _dead: bool = false
 var _prev_ai_state: int = -1
 var _replica_moving: bool = false
@@ -31,6 +30,7 @@ func _ready() -> void:
 	floor_stop_on_slope = true
 	floor_max_angle = deg_to_rad(45.0)
 	floor_snap_length = 0.1
+	_create_skeleton()
 	_pick_type_and_build()
 	ai.reset_timers()
 	_apply_type_to_ai()
@@ -44,38 +44,71 @@ func _ready() -> void:
 var _replica: bool = false
 
 
-func _pick_type_and_build() -> void:
-	if zombie_type != null:
-		var scale_val: float
-		if _replica:
-			scale_val = get_meta("replica_body_scale", zombie_type.body_scale_min)
-		else:
-			scale_val = randf_range(zombie_type.body_scale_min, zombie_type.body_scale_max)
-		skeleton.body_scale = scale_val
-		skeleton.build(zombie_type, scale_val)
-		health.max_health = zombie_type.health
-		health.current_health = zombie_type.health
-		health.invulnerability_time = 0.0
-		return
-	var zm := get_parent()
-	if zm and zm.has_method("roll_zombie_type"):
-		zombie_type = zm.roll_zombie_type()
-	if zombie_type == null:
-		zombie_type = preload("res://src/enemy/resources/zombie_shambler.tres")
+func _create_skeleton() -> void:
+	var skeleton_script: Script
+	match zombie_type.skeleton_type:
+		EnemyType.SkeletonType.DIRE_WOLF:
+			skeleton_script = preload("res://src/enemy/skeletons/dire_wolf_skeleton.gd")
+		EnemyType.SkeletonType.WRAITH:
+			skeleton_script = preload("res://src/enemy/skeletons/wraith_skeleton.gd")
+		EnemyType.SkeletonType.STONE_GOLEM:
+			skeleton_script = preload("res://src/enemy/skeletons/stone_golem_skeleton.gd")
+		_:
+			skeleton_script = preload("res://src/enemy/skeletons/dire_wolf_skeleton.gd")
 
-	var body_scale: float = randf_range(zombie_type.body_scale_min, zombie_type.body_scale_max)
-	skeleton.build(zombie_type, body_scale)
+	var node := Node3D.new()
+	node.set_script(skeleton_script)
+	skeleton = node as EnemySkeleton
+	skeleton.name = "Skeleton"
+	add_child(skeleton)
+
+
+func _pick_type_and_build() -> void:
+	if zombie_type == null:
+		zombie_type = preload("res://src/enemy/resources/dire_wolf.tres")
+
+	var scale_val: float
+	if _replica:
+		scale_val = get_meta("replica_body_scale", zombie_type.body_scale_min)
+	else:
+		scale_val = randf_range(zombie_type.body_scale_min, zombie_type.body_scale_max)
+	skeleton.body_scale = scale_val
+	skeleton.build(zombie_type, scale_val)
 	health.max_health = zombie_type.health
 	health.current_health = zombie_type.health
 	health.invulnerability_time = 0.0
+
+	# Apply float height for flying enemies (Wraith)
+	if zombie_type.float_height > 0.0:
+		_apply_float_height(zombie_type.float_height)
+	else:
+		# Apply gravity for ground enemies
+		movement.gravity = 9.8
+
+
+func _apply_float_height(height: float) -> void:
+	# For floating enemies, disable gravity and set initial hover height
+	movement.gravity = 0.0
+	global_position.y = _get_ground_y() + height
+
+
+func _get_ground_y() -> float:
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = global_position + Vector3.UP * 50.0
+	q.to = global_position + Vector3.DOWN * 50.0
+	q.collision_mask = 1
+	var hit: Dictionary = space.intersect_ray(q)
+	if hit:
+		return hit.position.y
+	return global_position.y
 
 
 func _apply_type_to_ai() -> void:
 	ai.speed_multiplier = zombie_type.speed_multiplier
 	ai.zombie_damage = zombie_type.damage
-	# Scale attack range proportionally to body size
-	var scale_factor := skeleton.body_scale / 5.0
-	ai.attack_range = ATTACK_RANGE * scale_factor
+	ai.attack_range = zombie_type.attack_range
+	ai.is_ranged = zombie_type.attack_type == EnemyType.AttackType.RANGED
 
 
 func _resize_collision() -> void:
@@ -122,7 +155,11 @@ func _physics_process(delta: float) -> void:
 		target_dir = (perception.target.global_position - global_position).normalized()
 	skeleton.update_animation(delta, is_moving, is_attacking, ai.is_surprised(), speed, target_dir)
 
-	movement.apply_gravity_and_slide(delta)
+	# Handle floating enemies
+	if zombie_type.float_height > 0.0:
+		_handle_float_movement(delta)
+	else:
+		movement.apply_gravity_and_slide(delta)
 
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	var q := PhysicsRayQueryParameters3D.new()
@@ -133,6 +170,19 @@ func _physics_process(delta: float) -> void:
 	if hit and global_position.y < hit.position.y - 0.05:
 		global_position.y = hit.position.y
 		velocity.y = 0.0
+
+
+func _handle_float_movement(delta: float) -> void:
+	# Floating enemies: move horizontally, maintain height above ground
+	var target_y := _get_ground_y() + zombie_type.float_height
+	var current_y := global_position.y
+	# Smoothly interpolate to target height
+	global_position.y = lerp(current_y, target_y, delta * 3.0)
+	# Apply horizontal movement only
+	velocity.y = 0.0
+	velocity.x = velocity.x  # Keep horizontal velocity from movement component
+	velocity.z = velocity.z
+	move_and_slide()
 
 
 @rpc("authority", "call_remote", "unreliable")
@@ -220,7 +270,7 @@ func _on_death() -> void:
 	if not parent:
 		parent = get_tree().current_scene as Node3D
 	if zombie_type:
-		fx.set_zombie_type(zombie_type)
+		fx.set_enemy_type(zombie_type)
 	parent.add_child(fx)
 	fx.global_position = pos
 

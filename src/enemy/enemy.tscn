@@ -1,7 +1,6 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://src/enemy/enemy.gd" id="1_xevmh"]
-[ext_resource type="PackedScene" path="res://src/enemy/zombie_skeleton.tscn" id="2_pah7h"]
 [ext_resource type="Script" path="res://src/enemy/components/health_component.gd" id="3_8cs8m"]
 [ext_resource type="Script" path="res://src/enemy/components/perception_component.gd" id="4_n0xxl"]
 [ext_resource type="Script" path="res://src/enemy/components/movement_component.gd" id="5_2mgnc"]
@@ -28,8 +27,6 @@ script = ExtResource("1_xevmh")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("CapsuleShape3D_xlg2h")
 position = Vector3(0, 0.7, 0)
-
-[node name="ZombieSkeleton" parent="." instance=ExtResource("2_pah7h")]
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_8cs8m")

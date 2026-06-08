@@ -1,0 +1,29 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/enemy/enemy_type.gd" id="1_wraith"]
+
+[resource]
+script = ExtResource("1_wraith")
+type_name = "Wraith"
+skeleton_type = 1
+attack_type = 1
+health = 8
+speed_multiplier = 1.4
+damage = 6
+attack_range = 12.0
+body_scale_min = 2.0
+body_scale_max = 4.0
+color_hue_min = 0.6
+color_hue_max = 0.75
+color_saturation = 0.3
+color_value = 0.4
+emissive_color = Color(0.3, 0.1, 0.8, 1.0)
+emissive_strength = 2.0
+roughness = 0.4
+metallic = 0.1
+attack_windup_ratio = 0.25
+attack_recover_ratio = 0.2
+flinch_strength = 0.6
+death_collapse_time = 0.5
+walk_cadence_mult = 1.3
+float_height = 2.5

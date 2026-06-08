@@ -506,85 +506,205 @@ func _scatter_trees() -> void:
 		add_child(mmi)
 
 func _make_grass_mesh() -> ArrayMesh:
+	# 3 intersecting blades with vertex color gradient (dark base -> light tip)
+	# and a slight curve via an intermediate row
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var w_bot := 0.04
-	var w_top := 0.01
-	var h := 0.3
+	var w_bot := 0.08
+	var w_mid := 0.045
+	var w_top := 0.012
+	var h := 0.6
+	var lean := 0.06  # horizontal offset for curve
+	var dark_base := Color(0.15, 0.45, 0.08)
+	var dark_mid := Color(0.2, 0.55, 0.1)
+	var light_tip := Color(0.35, 0.7, 0.15)
 	for i in 3:
 		var angle := float(i) / 3.0 * TAU
 		var perp := Vector3(-cos(angle), 0.0, sin(angle))
-		var v0 := -perp * w_bot * 0.5
-		var v1 := perp * w_bot * 0.5
-		var v2 := -perp * w_top * 0.5 + Vector3(0.0, h, 0.0)
-		var v3 := perp * w_top * 0.5 + Vector3(0.0, h, 0.0)
+		var lean_dir := Vector3(cos(angle + 1.0), 0.0, sin(angle + 1.0)).normalized() * lean
+		# Bottom row
+		var b0 := -perp * w_bot * 0.5
+		var b1 := perp * w_bot * 0.5
+		# Middle row (slightly offset for curve)
+		var m0 := -perp * w_mid * 0.5 + lean_dir * 0.5 + Vector3(0.0, h * 0.5, 0.0)
+		var m1 := perp * w_mid * 0.5 + lean_dir * 0.5 + Vector3(0.0, h * 0.5, 0.0)
+		# Top row
+		var t0 := -perp * w_top * 0.5 + lean_dir + Vector3(0.0, h, 0.0)
+		var t1 := perp * w_top * 0.5 + lean_dir + Vector3(0.0, h, 0.0)
 		var n := Vector3(sin(angle), 0.0, cos(angle))
-		for v in [v0, v1, v2, v1, v3, v2]:
-			st.set_normal(n)
-			st.add_vertex(v)
+		# Bottom quad (base -> mid)
+		for data in [[b0, dark_base, n], [b1, dark_base, n], [m0, dark_mid, n],
+					 [b1, dark_base, n], [m1, dark_mid, n], [m0, dark_mid, n]]:
+			st.set_color(data[1])
+			st.set_normal(data[2])
+			st.set_uv(Vector2(0, 0))
+			st.add_vertex(data[0])
+		# Top quad (mid -> tip)
+		for data in [[m0, dark_mid, n], [m1, dark_mid, n], [t0, light_tip, n],
+					 [m1, dark_mid, n], [t1, light_tip, n], [t0, light_tip, n]]:
+			st.set_color(data[1])
+			st.set_normal(data[2])
+			st.set_uv(Vector2(0, 0))
+			st.add_vertex(data[0])
 	return st.commit()
+
+func _add_sphere_cluster(st: SurfaceTool, center: Vector3, r: float, col_base: Color, col_top: Color) -> void:
+	for ri in 3:
+		var lat0 := float(ri) / 3.0 * PI
+		var lat1 := float(ri + 1) / 3.0 * PI
+		for j in 6:
+			var lon0 := float(j) / 6.0 * TAU
+			var lon1 := float(j + 1) / 6.0 * TAU
+			for face in [
+				[lat0, lon0, lat0, lon1, lat1, lon0],
+				[lat0, lon1, lat1, lon1, lat1, lon0],
+			]:
+				var v0 := Vector3(sin(face[0]) * cos(face[1]), cos(face[0]), sin(face[0]) * sin(face[1])) * r + center
+				var v1 := Vector3(sin(face[2]) * cos(face[3]), cos(face[2]), sin(face[2]) * sin(face[3])) * r + center
+				var v2 := Vector3(sin(face[4]) * cos(face[5]), cos(face[4]), sin(face[4]) * sin(face[5])) * r + center
+				var n0 := (v0 - center).normalized()
+				var n1 := (v1 - center).normalized()
+				var n2 := (v2 - center).normalized()
+				var avg_y := (v0.y + v1.y + v2.y) / 3.0
+				var t: float = clamp((avg_y - (center.y - r)) / (r * 2.0), 0.0, 1.0)
+				var col := col_base.lerp(col_top, t)
+				st.set_color(col); st.set_normal(n0); st.set_uv(Vector2(0, 0)); st.add_vertex(v0)
+				st.set_color(col); st.set_normal(n1); st.set_uv(Vector2(0, 0)); st.add_vertex(v1)
+				st.set_color(col); st.set_normal(n2); st.set_uv(Vector2(0, 0)); st.add_vertex(v2)
 
 func _make_bush_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var centers: Array[Vector3] = [Vector3.ZERO, Vector3(0.08, 0.04, 0.08)]
-	for center in centers:
-		var r := 0.18
-		for ri in 3:
-			var lat0 := float(ri) / 3.0 * PI
-			var lat1 := float(ri + 1) / 3.0 * PI
-			for j in 6:
-				var lon0 := float(j) / 6.0 * TAU
-				var lon1 := float(j + 1) / 6.0 * TAU
-				var face_a: Array[float] = [lat0, lon0, lat0, lon1, lat1, lon0]
-				var face_b: Array[float] = [lat0, lon1, lat1, lon1, lat1, lon0]
-				for face in [face_a, face_b]:
-					var px0 := sin(face[0]) * cos(face[1]) * r
-					var py0 := cos(face[0]) * r
-					var pz0 := sin(face[0]) * sin(face[1]) * r
-					var p0: Vector3 = Vector3(px0, py0, pz0) + center
-					var n0: Vector3 = (p0 - center).normalized()
-					var px1 := sin(face[2]) * cos(face[3]) * r
-					var py1 := cos(face[2]) * r
-					var pz1 := sin(face[2]) * sin(face[3]) * r
-					var p1: Vector3 = Vector3(px1, py1, pz1) + center
-					var n1: Vector3 = (p1 - center).normalized()
-					var px2 := sin(face[4]) * cos(face[5]) * r
-					var py2 := cos(face[4]) * r
-					var pz2 := sin(face[4]) * sin(face[5]) * r
-					var p2: Vector3 = Vector3(px2, py2, pz2) + center
-					var n2: Vector3 = (p2 - center).normalized()
-					st.set_normal(n0)
-					st.add_vertex(p0)
-					st.set_normal(n1)
-					st.add_vertex(p1)
-					st.set_normal(n2)
-					st.add_vertex(p2)
+
+	# 5 leaf cluster spheres at varied positions for organic shape
+	var cluster_data: Array[Array] = [
+		[Vector3(0.0, 0.40, 0.0), 0.35],       # main center
+		[Vector3(0.20, 0.48, 0.10), 0.26],      # upper right
+		[Vector3(-0.14, 0.44, -0.16), 0.24],    # upper left-back
+		[Vector3(0.08, 0.36, -0.14), 0.20],     # lower back
+		[Vector3(-0.10, 0.50, 0.14), 0.22],     # upper left-front
+	]
+	var col_base := Color(0.12, 0.32, 0.08)
+	var col_top := Color(0.22, 0.48, 0.14)
+	for cd in cluster_data:
+		_add_sphere_cluster(st, cd[0], cd[1], col_base, col_top)
+
+	# Small trunk/stem at base
+	var trunk_col := Color(0.3, 0.2, 0.1)
+	var trunk_top := Color(0.25, 0.18, 0.09)
+	_make_cylinder_segment(st, Vector3(0.0, 0.0, 0.0), Vector3(0.03, 0.20, 0.02), 0.05, 0.035, 4, trunk_col)
+	_make_cylinder_segment(st, Vector3(0.03, 0.20, 0.02), Vector3(-0.02, 0.34, -0.03), 0.035, 0.025, 4, trunk_top)
+
 	return st.commit()
 
 func _make_flower_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var stem_w := 0.006
-	var stem_h := 0.12
-	var n_stem := Vector3(0.0, 0.0, 1.0)
-	for v in [Vector3(-stem_w, 0.0, 0.0), Vector3(stem_w, 0.0, 0.0), Vector3(-stem_w, stem_h, 0.0),
-			Vector3(stem_w, 0.0, 0.0), Vector3(stem_w, stem_h, 0.0), Vector3(-stem_w, stem_h, 0.0)]:
-		st.set_normal(n_stem)
-		st.add_vertex(v)
-	var hw := 0.03
-	var hh := 0.03
-	for i in 3:
-		var a := float(i) / 3.0 * TAU
-		var perp := Vector3(-cos(a), 0.0, sin(a))
-		var v0 := -perp * hw * 0.5 + Vector3(0.0, stem_h, 0.0)
-		var v1 := perp * hw * 0.5 + Vector3(0.0, stem_h, 0.0)
-		var v2 := -perp * hw * 0.5 + Vector3(0.0, stem_h + hh, 0.0)
-		var v3 := perp * hw * 0.5 + Vector3(0.0, stem_h + hh, 0.0)
-		var n := Vector3(sin(a), 0.0, cos(a))
-		for v in [v0, v1, v2, v1, v3, v2]:
-			st.set_normal(n)
-			st.add_vertex(v)
+	var stem_h := 0.38
+	var stem_col := Color(0.15, 0.4, 0.1)
+	var stem_top_col := Color(0.2, 0.5, 0.12)
+
+	# Stem (2 segments for slight curve)
+	_make_cylinder_segment(st, Vector3(0.0, 0.0, 0.0), Vector3(0.015, stem_h * 0.5, 0.008), 0.014, 0.012, 4, stem_col)
+	_make_cylinder_segment(st, Vector3(0.015, stem_h * 0.5, 0.008), Vector3(0.0, stem_h, 0.0), 0.012, 0.008, 4, stem_top_col)
+
+	# Small leaf on stem (one side)
+	var leaf_col := Color(0.18, 0.45, 0.1)
+	var leaf_n := Vector3(0.0, 0.0, 1.0)
+	var leaf_y := stem_h * 0.4
+	var leaf_hw := 0.04
+	var leaf_hh := 0.05
+	for v in [
+		Vector3(0.0, leaf_y, 0.0),
+		Vector3(leaf_hw * 2, leaf_y, 0.0),
+		Vector3(leaf_hw, leaf_y + leaf_hh, 0.0),
+	]:
+		st.set_color(leaf_col); st.set_normal(leaf_n); st.set_uv(Vector2(0, 0)); st.add_vertex(v)
+
+	# 5 petals arranged in a ring, angled outward
+	var petal_col := Color(0.85, 0.25, 0.35)
+	var petal_tip := Color(0.95, 0.4, 0.5)
+	var petal_len := 0.09
+	var petal_w := 0.04
+	var petal_spread := 0.3  # outward tilt
+	for i in 5:
+		var a := float(i) / 5.0 * TAU
+		var dir := Vector3(cos(a), 0.0, sin(a))
+		var tip_pos := Vector3(cos(a) * petal_len, stem_h + 0.02, sin(a) * petal_len) + dir * petal_spread * 0.3
+		var center_pos := Vector3(0.0, stem_h, 0.0)
+		var side := Vector3(-sin(a), 0.0, cos(a))
+		var v0 := center_pos - side * petal_w * 0.5
+		var v1 := center_pos + side * petal_w * 0.5
+		var v2 := tip_pos
+		var n := Vector3(cos(a), 0.5, sin(a)).normalized()
+		for data in [[v0, petal_col], [v1, petal_col], [v2, petal_tip]]:
+			st.set_color(data[1]); st.set_normal(n); st.set_uv(Vector2(0, 0)); st.add_vertex(data[0])
+
+	# Center disk (2 triangles forming a small quad)
+	var center_col := Color(0.95, 0.85, 0.15)
+	var c0 := Vector3(0.0, stem_h + 0.008, 0.0)
+	var ch := 0.02
+	for i in 4:
+		var a0 := float(i) / 4.0 * TAU
+		var a1 := float(i + 1) / 4.0 * TAU
+		var p0 := c0 + Vector3(cos(a0), 0.0, sin(a0)) * ch
+		var p1 := c0 + Vector3(cos(a1), 0.0, sin(a1)) * ch
+		st.set_color(center_col); st.set_normal(Vector3.UP); st.set_uv(Vector2(0, 0)); st.add_vertex(c0)
+		st.set_color(center_col); st.set_normal(Vector3.UP); st.set_uv(Vector2(0, 0)); st.add_vertex(p0)
+		st.set_color(center_col); st.set_normal(Vector3.UP); st.set_uv(Vector2(0, 0)); st.add_vertex(p1)
+
+	return st.commit()
+
+func _make_mushroom_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	# Stem - short thick cylinder
+	var stem_col := Color(0.85, 0.8, 0.7)
+	var stem_top := Color(0.8, 0.75, 0.65)
+	_make_cylinder_segment(st, Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.14, 0.0), 0.035, 0.025, 5, stem_col)
+	_make_cylinder_segment(st, Vector3(0.0, 0.14, 0.0), Vector3(0.008, 0.22, 0.0), 0.025, 0.020, 5, stem_top)
+
+	# Cap - hemisphere (top half of sphere)
+	var cap_col := Color(0.55, 0.15, 0.1)
+	var cap_light := Color(0.65, 0.2, 0.12)
+	var cap_center := Vector3(0.008, 0.22, 0.0)
+	var cap_r := 0.10
+	for ri in 4:
+		var lat0 := float(ri) / 8.0 * PI  # only top half
+		var lat1 := float(ri + 1) / 8.0 * PI
+		for j in 6:
+			var lon0 := float(j) / 6.0 * TAU
+			var lon1 := float(j + 1) / 6.0 * TAU
+			for face in [
+				[lat0, lon0, lat0, lon1, lat1, lon0],
+				[lat0, lon1, lat1, lon1, lat1, lon0],
+			]:
+				var v0 := Vector3(sin(face[0]) * cos(face[1]), cos(face[0]), sin(face[0]) * sin(face[1])) * cap_r + cap_center
+				var v1 := Vector3(sin(face[2]) * cos(face[3]), cos(face[2]), sin(face[2]) * sin(face[3])) * cap_r + cap_center
+				var v2 := Vector3(sin(face[4]) * cos(face[5]), cos(face[4]), sin(face[4]) * sin(face[5])) * cap_r + cap_center
+				var n0 := (v0 - cap_center).normalized()
+				var n1 := (v1 - cap_center).normalized()
+				var n2 := (v2 - cap_center).normalized()
+				# Brighter on top
+				var avg_y := (v0.y + v1.y + v2.y) / 3.0
+				var t: float = clamp((avg_y - cap_center.y) / cap_r, 0.0, 1.0)
+				var col := cap_col.lerp(cap_light, t)
+				st.set_color(col); st.set_normal(n0); st.set_uv(Vector2(0, 0)); st.add_vertex(v0)
+				st.set_color(col); st.set_normal(n1); st.set_uv(Vector2(0, 0)); st.add_vertex(v1)
+				st.set_color(col); st.set_normal(n2); st.set_uv(Vector2(0, 0)); st.add_vertex(v2)
+
+	# Bottom cap disk (flat underside)
+	var underside := Color(0.8, 0.75, 0.65)
+	for i in 6:
+		var a0 := float(i) / 6.0 * TAU
+		var a1 := float(i + 1) / 6.0 * TAU
+		var p0 := cap_center + Vector3(cos(a0), 0.0, sin(a0)) * cap_r
+		var p1 := cap_center + Vector3(cos(a1), 0.0, sin(a1)) * cap_r
+		st.set_color(underside); st.set_normal(Vector3.DOWN); st.set_uv(Vector2(0, 0)); st.add_vertex(cap_center)
+		st.set_color(underside); st.set_normal(Vector3.DOWN); st.set_uv(Vector2(0, 0)); st.add_vertex(p0)
+		st.set_color(underside); st.set_normal(Vector3.DOWN); st.set_uv(Vector2(0, 0)); st.add_vertex(p1)
+
 	return st.commit()
 
 func _scatter_foliage() -> void:
@@ -596,6 +716,7 @@ func _scatter_foliage() -> void:
 	var grass_mesh := _make_grass_mesh()
 	var bush_mesh := _make_bush_mesh()
 	var flower_mesh := _make_flower_mesh()
+	var mushroom_mesh := _make_mushroom_mesh()
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = world_gen.seed_value + 5000
@@ -606,9 +727,11 @@ func _scatter_foliage() -> void:
 	var bush_colors: Array[Color] = []
 	var flower_transforms: Array[Transform3D] = []
 	var flower_colors: Array[Color] = []
+	var mushroom_transforms: Array[Transform3D] = []
+	var mushroom_colors: Array[Color] = []
 
 	var half := HALF_WORLD - 2.0
-	for _attempt in 12000:
+	for _attempt in 18000:
 		var x := rng.randf_range(-half, half)
 		var z := rng.randf_range(-half, half)
 		var h := world_gen.get_height(x, z)
@@ -625,25 +748,31 @@ func _scatter_foliage() -> void:
 
 		match biome:
 			world_gen.Biome.MEADOWS:
-				if r < 0.45:
+				if r < 0.40:
 					var col := Color(bc.r * rng.randf_range(0.7, 1.3), bc.g * rng.randf_range(0.7, 1.3), bc.b * rng.randf_range(0.7, 1.3), 1.0)
 					_add_foliage_point(grass_transforms, grass_colors, x, h, z, rng, col)
-				elif r < 0.50:
+				elif r < 0.46:
 					var brights := [Color(1.0, 0.9, 0.2), Color(1.0, 0.3, 0.3), Color(0.4, 0.5, 1.0), Color(1.0, 0.5, 0.8), Color(1.0, 1.0, 1.0)]
 					_add_foliage_point(flower_transforms, flower_colors, x, h, z, rng, brights[rng.randi() % brights.size()])
+				elif r < 0.49:
+					_add_foliage_point(mushroom_transforms, mushroom_colors, x, h, z, rng, Color.WHITE)
 
 			world_gen.Biome.BLACK_FOREST:
-				if forest > 0.3 and r < 0.25:
+				if forest > 0.3 and r < 0.22:
 					var col := Color(bc.r * rng.randf_range(0.8, 1.2), bc.g * rng.randf_range(0.8, 1.2), bc.b * rng.randf_range(0.8, 1.2), 1.0)
 					_add_foliage_point(grass_transforms, grass_colors, x, h, z, rng, col)
-				elif r < 0.35:
+				elif r < 0.30:
 					var col := Color(bc.r * rng.randf_range(0.8, 1.2), bc.g * rng.randf_range(0.8, 1.2), bc.b * rng.randf_range(0.8, 1.2), 1.0)
 					_add_foliage_point(bush_transforms, bush_colors, x, h, z, rng, col)
+				elif r < 0.34:
+					_add_foliage_point(mushroom_transforms, mushroom_colors, x, h, z, rng, Color.WHITE)
 
 			world_gen.Biome.SWAMP:
-				if r < 0.12:
+				if r < 0.10:
 					var col := Color(bc.r * rng.randf_range(0.8, 1.2), bc.g * rng.randf_range(0.8, 1.2), bc.b * rng.randf_range(0.8, 1.2), 1.0)
 					_add_foliage_point(bush_transforms, bush_colors, x, h, z, rng, col)
+				elif r < 0.14:
+					_add_foliage_point(mushroom_transforms, mushroom_colors, x, h, z, rng, Color(0.7, 0.9, 0.7))
 
 			world_gen.Biome.MOUNTAIN:
 				if r < 0.05 and h < 3.0:
@@ -653,11 +782,12 @@ func _scatter_foliage() -> void:
 	_build_foliage_multimesh(grass_mesh, fol_mat, grass_transforms, grass_colors, "Grass")
 	_build_foliage_multimesh(bush_mesh, fol_mat, bush_transforms, bush_colors, "Bushes")
 	_build_foliage_multimesh(flower_mesh, fol_mat, flower_transforms, flower_colors, "Flowers")
+	_build_foliage_multimesh(mushroom_mesh, fol_mat, mushroom_transforms, mushroom_colors, "Mushrooms")
 
 func _add_foliage_point(transforms: Array[Transform3D], colors: Array[Color], x: float, h: float, z: float, rng: RandomNumberGenerator, col: Color) -> void:
 	var t := Transform3D.IDENTITY
 	t.origin = Vector3(x, h, z)
-	t.basis = t.basis.scaled(Vector3(rng.randf_range(0.6, 1.4), rng.randf_range(0.6, 1.4), rng.randf_range(0.6, 1.4)))
+	t.basis = t.basis.scaled(Vector3(rng.randf_range(0.8, 1.8), rng.randf_range(0.8, 1.8), rng.randf_range(0.8, 1.8)))
 	t.basis = t.basis.rotated(Vector3.UP, rng.randf() * TAU)
 	transforms.append(t)
 	colors.append(col)

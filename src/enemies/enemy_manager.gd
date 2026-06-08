@@ -3,15 +3,15 @@ extends Node
 signal enemy_killed(score_amount: int)
 
 const EnemyScene = preload("res://src/enemy/enemy.tscn")
-const ShamblerType = preload("res://src/enemy/resources/zombie_shambler.tres")
-const RunnerType = preload("res://src/enemy/resources/zombie_runner.tres")
-const BruteType = preload("res://src/enemy/resources/zombie_brute.tres")
+const DireWolfType = preload("res://src/enemy/resources/dire_wolf.tres")
+const WraithType = preload("res://src/enemy/resources/wraith.tres")
+const StoneGolemType = preload("res://src/enemy/resources/stone_golem.tres")
 
 @export var world_gen: WorldGen
 
-@export var type_weight_shambler: float = 60.0
-@export var type_weight_runner: float = 25.0
-@export var type_weight_brute: float = 15.0
+@export var type_weight_dire_wolf: float = 50.0
+@export var type_weight_wraith: float = 30.0
+@export var type_weight_stone_golem: float = 20.0
 
 var max_enemies: int = 60
 var spawn_cooldown: float = 2.0
@@ -30,9 +30,6 @@ func _ready() -> void:
 	if not world_gen:
 		world_gen = get_parent().find_child("WorldGen") as WorldGen
 
-	# Enemy position/rotation sync is handled by MultiplayerSynchronizer in enemy.tscn.
-	# The server runs AI and physics; MultiplayerSynchronizer replicates state to clients.
-
 
 func _process(delta: float) -> void:
 	if multiplayer.multiplayer_peer != null and not multiplayer.is_server():
@@ -48,19 +45,17 @@ func _cleanup_dead() -> void:
 	enemies = enemies.filter(func(e): return is_instance_valid(e)) as Array[Enemy]
 
 
-func roll_zombie_type() -> ZombieType:
-	var total := type_weight_shambler + type_weight_runner + type_weight_brute
+func roll_zombie_type() -> EnemyType:
+	var total := type_weight_dire_wolf + type_weight_wraith + type_weight_stone_golem
 	var roll := randf() * total
-	if roll < type_weight_shambler:
-		return ShamblerType
-	elif roll < type_weight_shambler + type_weight_runner:
-		return RunnerType
-	return BruteType
+	if roll < type_weight_dire_wolf:
+		return DireWolfType
+	elif roll < type_weight_dire_wolf + type_weight_wraith:
+		return WraithType
+	return StoneGolemType
 
 
 func _ground_height_at(x: float, z: float) -> float:
-	# Returns terrain height from physics raycast, or INF if no terrain
-	# collision shape exists yet (chunk still loading async).
 	var cell := Vector2i(floori(x / 10.0), floori(z / 10.0))
 	var now := Time.get_ticks_msec()
 	if _raycast_cache.has(cell) and now - _raycast_cache_times.get(cell, 0) < 5000:
@@ -118,14 +113,18 @@ func _try_spawn() -> void:
 
 		var h := _ground_height_at(sx, sz)
 		if h == INF or h < 0.1:
-			# Terrain collision shape not loaded yet — skip this frame,
-			# the next spawn attempt will re-query.
 			continue
 
 		var enemy: Enemy = EnemyScene.instantiate() as Enemy
 		enemy.name = "Enemy_%d" % _enemy_spawn_index
+		enemy.zombie_type = roll_zombie_type()
 		add_child(enemy, true)
-		var spawn_pos := Vector3(sx, h + 0.2, sz)
+
+		var spawn_y := h + 0.2
+		if enemy.zombie_type.float_height > 0.0:
+			spawn_y = h + enemy.zombie_type.float_height
+
+		var spawn_pos := Vector3(sx, spawn_y, sz)
 		enemy.global_position = spawn_pos
 		enemies.append(enemy)
 		enemy.died.connect(_on_enemy_died.bind(enemy))
@@ -141,7 +140,7 @@ func _spawn_enemy_replica(index: int, spawn_pos: Vector3, type_path: String, bod
 		return
 	if get_node_or_null("Enemy_%d" % index):
 		return
-	var enemy := EnemyScene.instantiate() as Enemy
+	var enemy: Enemy = EnemyScene.instantiate() as Enemy
 	enemy.name = "Enemy_%d" % index
 	enemy.zombie_type = load(type_path)
 	enemy._replica = true
@@ -170,18 +169,13 @@ func _despawn_enemy_replica(index: int) -> void:
 		var pos := enemy.global_position
 		if enemy.zombie_type:
 			var fx := preload("res://src/enemy/effects/death_explosion.tscn").instantiate()
-			fx.set_zombie_type(enemy.zombie_type)
+			fx.set_enemy_type(enemy.zombie_type)
 			add_child(fx)
 			fx.global_position = pos
 		AudioManager.play_enemy_death()
 		_shake_replica_camera(0.06, 0.35)
 		enemy.queue_free()
 		_cleanup_dead()
-
-
-# Enemy position sync is now handled entirely by MultiplayerSynchronizer in enemy.tscn.
-# The SceneReplicationConfig syncs position and rotation from server authority to all clients.
-# No manual position broadcast needed.
 
 
 func _shake_replica_camera(amount: float, duration: float) -> void:

@@ -29,7 +29,7 @@ var _scale_mult: float = 1.0
 var _emissive_color: Color = Color(1.0, 0.3, 0.1)
 
 
-func set_zombie_type(type: ZombieType) -> void:
+func set_enemy_type(type: EnemyType) -> void:
 	if type:
 		_scale_mult = max(0.5, type.health / 20.0)
 		_emissive_color = type.emissive_color
