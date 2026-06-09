@@ -9,6 +9,10 @@ extends SceneTree
 # Warnings are otherwise only visible in the editor Debugger panel.
 #
 # Requires: godot -d (debug mode) to print warnings at Warn level.
+#
+# NOTE: Clear godot.log after troubleshooting by running:
+#   > /dev/null godot.log || rm godot.log
+# or: echo "" > godot.log
 
 func _initialize():
 	print("=== GDScript Warning Validator ===")

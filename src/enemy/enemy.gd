@@ -22,6 +22,10 @@ var _prev_ai_state: int = -1
 var _replica_moving: bool = false
 var _replica_attacking: bool = false
 
+# IK modifiers (set up during _pick_type_and_build)
+var _foot_modifier: FootPlacementModifier3D
+var _hand_modifier: HandTargetModifier3D
+
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -85,6 +89,9 @@ func _pick_type_and_build() -> void:
 		# Apply gravity for ground enemies
 		movement.gravity = 9.8
 
+	# Set up IK modifiers based on skeleton type
+	_setup_ik_modifiers()
+
 
 func _apply_float_height(height: float) -> void:
 	# For floating enemies, disable gravity and set initial hover height
@@ -114,9 +121,10 @@ func _apply_type_to_ai() -> void:
 func _resize_collision() -> void:
 	if collision_shape and collision_shape.shape is CapsuleShape3D:
 		var capsule: CapsuleShape3D = collision_shape.shape
-		var scale_factor := skeleton.body_scale / 0.75
-		capsule.height = 1.4 * scale_factor
-		capsule.radius = 0.2 * scale_factor
+		# Scale collision to match skeleton: feet at y=0, head top at ~0.93 * body_scale
+		var s := skeleton.body_scale
+		capsule.height = 0.93 * s
+		capsule.radius = 0.2 * s
 		collision_shape.position.y = capsule.height * 0.5
 
 
@@ -154,6 +162,9 @@ func _physics_process(delta: float) -> void:
 	if perception.target and is_instance_valid(perception.target):
 		target_dir = (perception.target.global_position - global_position).normalized()
 	skeleton.update_animation(delta, is_moving, is_attacking, ai.is_surprised(), speed, target_dir)
+
+	# Drive IK modifiers (hand targeting during attacks)
+	_update_ik_drivers(is_attacking)
 
 	# Handle floating enemies
 	if zombie_type.float_height > 0.0:
@@ -312,3 +323,70 @@ func _cleanup() -> void:
 		collision_shape.disabled = true
 	died.emit(global_position)
 	queue_free()
+
+
+# --- IK Modifier Integration ---
+
+func _setup_ik_modifiers() -> void:
+	var skel := skeleton.get_node_or_null("Skeleton3D") as Skeleton3D
+	if not skel:
+		return
+
+	match zombie_type.skeleton_type:
+		EnemyType.SkeletonType.DIRE_WOLF:
+			_setup_dire_wolf_ik(skel)
+		EnemyType.SkeletonType.STONE_GOLEM:
+			_setup_stone_golem_ik(skel)
+		# Wraith has no feet — skip IK
+
+
+func _setup_dire_wolf_ik(skel: Skeleton3D) -> void:
+	# Foot placement for 4 legs
+	var foot_mod := FootPlacementModifier3D.new()
+	foot_mod.name = "FootPlacement"
+	skel.add_child(foot_mod)
+
+	# Bone indices: LowerLegFL=6, LowerLegFR=8, LowerLegBL=10, LowerLegBR=12
+	# Parent indices: UpperLegFL=5, UpperLegFR=7, UpperLegBL=9, UpperLegBR=11
+	foot_mod.initialize(skel,
+		PackedInt32Array([6, 8, 10, 12]),
+		PackedInt32Array([5, 7, 9, 11]))
+	_foot_modifier = foot_mod
+
+
+func _setup_stone_golem_ik(skel: Skeleton3D) -> void:
+	# Foot placement for 2 feet
+	var foot_mod := FootPlacementModifier3D.new()
+	foot_mod.name = "FootPlacement"
+	skel.add_child(foot_mod)
+
+	# Bone indices: FootL=11, FootR=14 (Root=0 shifted everything +1)
+	# Parent indices: ShinL=10, ShinR=13
+	foot_mod.initialize(skel,
+		PackedInt32Array([11, 14]),
+		PackedInt32Array([10, 13]))
+	_foot_modifier = foot_mod
+
+	# Hand targeting for stone golem punches
+	var hand_mod := HandTargetModifier3D.new()
+	hand_mod.name = "HandTarget"
+	skel.add_child(hand_mod)
+
+	# Bone indices: FistL=5, FistR=8 (Root=0 shifted everything +1)
+	hand_mod.initialize(skel, 5, 8)
+	_hand_modifier = hand_mod
+
+
+func _update_ik_drivers(is_attacking: bool) -> void:
+	# Drive the hand target modifier during attacks (stone golem)
+	if _hand_modifier:
+		_hand_modifier.is_attacking = is_attacking
+		if is_attacking and perception.target and is_instance_valid(perception.target):
+			_hand_modifier.attack_target_pos = perception.target.global_position
+			# Calculate attack phase from skeleton's attack timer
+			if skeleton is StoneGolemSkeleton:
+				_hand_modifier.attack_phase = skeleton._attack_anim_timer / StoneGolemSkeleton.ATTACK_COOLDOWN
+			else:
+				_hand_modifier.attack_phase = 0.0
+		else:
+			_hand_modifier.attack_phase = 0.0

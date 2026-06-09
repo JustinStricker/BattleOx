@@ -19,6 +19,20 @@ const DASH_PATH_WIDTH: float = 3.0
 const DASH_PATH_HEIGHT: float = 3.0
 const DASH_PATH_DEPTH: float = 24.0
 
+# Blade trail
+var _blade_tip_marker: Node3D
+var _blade_base_marker: Node3D
+var _trail_mesh_instance: MeshInstance3D
+var _trail_material: StandardMaterial3D
+var _trail_tip_positions: Array[Vector3] = []
+var _trail_base_positions: Array[Vector3] = []
+var _trail_active: bool = false
+var _trail_opacity: float = 0.0
+var _trail_fading: bool = false
+
+const TRAIL_MAX_SAMPLES: int = 16
+const TRAIL_FADE_DURATION: float = 0.3
+
 
 func _ready() -> void:
 	position = Vector3(0.4, -0.3, -0.5)
@@ -27,6 +41,32 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	slash_cooldown = max(slash_cooldown - delta, 0.0)
+
+	# Record trail positions during active slash
+	if _trail_active and sword_meshes.visible:
+		var tip_pos := _blade_tip_marker.global_position
+		var base_pos := _blade_base_marker.global_position
+		_trail_tip_positions.append(tip_pos)
+		_trail_base_positions.append(base_pos)
+		if _trail_tip_positions.size() > TRAIL_MAX_SAMPLES:
+			_trail_tip_positions.pop_front()
+			_trail_base_positions.pop_front()
+		_build_trail_mesh()
+		_trail_opacity = 1.0
+		_trail_fading = false
+		_trail_mesh_instance.visible = true
+
+	# Fade trail after slash ends
+	if _trail_fading:
+		_trail_opacity -= delta / TRAIL_FADE_DURATION
+		if _trail_opacity <= 0.0:
+			_trail_opacity = 0.0
+			_trail_fading = false
+			_trail_mesh_instance.visible = false
+			_trail_tip_positions.clear()
+			_trail_base_positions.clear()
+		_trail_material.albedo_color.a = 0.7 * max(_trail_opacity, 0.0)
+		_trail_material.emission_energy_multiplier = 5.0 * max(_trail_opacity, 0.0)
 
 func start_slash() -> bool:
 	if slash_cooldown > 0.0 or is_slashing:
@@ -132,7 +172,6 @@ func _build_sword_mesh() -> void:
 	_blade_glow_mat.emission_enabled = true
 	_blade_glow_mat.emission = Color(0.2, 0.5, 1.0)
 	_blade_glow_mat.emission_energy_multiplier = 0.0
-	_blade_glow_mat.no_depth_test = true
 
 	# Hilt/pommel at right end of grip
 	var hilt: MeshInstance3D = MeshInstance3D.new()
@@ -213,6 +252,65 @@ func _build_sword_mesh() -> void:
 	_blade_glow_instance.material_override = _blade_glow_mat
 	_blade_glow_instance.position = Vector3(-0.12, 0, 0)
 	_sword_pivot.add_child(_blade_glow_instance)
+
+	# Blade tip marker for trail tracking
+	_blade_tip_marker = Node3D.new()
+	_blade_tip_marker.position = Vector3(-0.62, 0, 0.035)
+	_sword_pivot.add_child(_blade_tip_marker)
+
+	# Blade base marker for trail tracking
+	_blade_base_marker = Node3D.new()
+	_blade_base_marker.position = Vector3(-0.12, 0, 0)
+	_sword_pivot.add_child(_blade_base_marker)
+
+	# Trail material — additive glow
+	_trail_material = StandardMaterial3D.new()
+	_trail_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_trail_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_trail_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_trail_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_trail_material.albedo_color = Color(0.4, 0.8, 1.0, 0.7)
+	_trail_material.emission_enabled = true
+	_trail_material.emission = Color(0.3, 0.6, 1.0)
+	_trail_material.emission_energy_multiplier = 5.0
+
+	_trail_mesh_instance = MeshInstance3D.new()
+	_trail_mesh_instance.name = "BladeTrail"
+	_trail_mesh_instance.material_override = _trail_material
+	_trail_mesh_instance.visible = false
+	add_child(_trail_mesh_instance)
+
+
+func _start_trail() -> void:
+	_trail_tip_positions.clear()
+	_trail_base_positions.clear()
+	_trail_active = true
+	_trail_fading = false
+	_trail_opacity = 1.0
+
+
+func _stop_trail() -> void:
+	_trail_active = false
+	_trail_fading = true
+
+
+func _build_trail_mesh() -> void:
+	if _trail_tip_positions.size() < 2:
+		return
+
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+
+	var count := _trail_tip_positions.size()
+	for i in range(count):
+		var t := float(i) / float(count - 1)
+		st.set_uv(Vector2(t, 0.0))
+		st.add_vertex(_trail_mesh_instance.to_local(_trail_tip_positions[i]))
+		st.set_uv(Vector2(t, 1.0))
+		st.add_vertex(_trail_mesh_instance.to_local(_trail_base_positions[i]))
+
+	var mesh: ArrayMesh = st.commit()
+	_trail_mesh_instance.mesh = mesh
 
 
 func _perform_slash_hit() -> void:
@@ -299,6 +397,7 @@ func _shake_camera(amount: float, duration: float) -> void:
 			camera.rotation.x = orig_rot_x
 			camera.rotation.y = orig_rot_y
 	)
+
 
 
 
@@ -398,6 +497,7 @@ func _play_slash_animation() -> void:
 	sword_meshes.scale = Vector3.ONE
 	_sword_pivot.rotation = Vector3.ZERO
 	sword_meshes.visible = true
+	_start_trail()
 
 	_perform_slash_hit()
 
@@ -421,6 +521,7 @@ func _play_slash_animation() -> void:
 	tween.parallel().tween_property(_blade_glow_mat, "emission_energy_multiplier", 0.0, 0.2).set_ease(Tween.EASE_IN)
 	tween.parallel().tween_property(_blade_glow_mat, "albedo_color:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
 
+	tween.tween_callback(_stop_trail)
 	tween.tween_property(sword_meshes, "position", SHEATHE_POS, SHEATHE_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(sword_meshes, "rotation", SHEATHE_ROT, SHEATHE_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(_sword_pivot, "rotation:z", SHEATHE_ROT.z, SHEATHE_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
@@ -431,6 +532,11 @@ func _play_slash_animation() -> void:
 		_flash_light.visible = false
 		_blade_glow_mat.emission_energy_multiplier = 0.0
 		_blade_glow_mat.albedo_color.a = 0.0
+		_trail_active = false
+		_trail_fading = false
+		_trail_mesh_instance.visible = false
+		_trail_tip_positions.clear()
+		_trail_base_positions.clear()
 		is_slashing = false
 		slash_completed.emit()
 	)

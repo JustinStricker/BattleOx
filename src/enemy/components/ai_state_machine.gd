@@ -142,7 +142,7 @@ func _fire_ranged_attack(target: Node3D) -> void:
 	projectile.global_position = origin
 
 
-func _create_projectile(origin: Vector3, direction: Vector3, speed: float) -> Node3D:
+func _create_projectile(_origin: Vector3, direction: Vector3, speed: float) -> Node3D:
 	# Create a simple energy bolt projectile
 	var projectile := Node3D.new()
 	projectile.name = "EnergyBolt"
