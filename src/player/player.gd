@@ -11,8 +11,6 @@ var health: int = 100
 var max_health: int = 100
 var invincible_timer: float = 0.0
 var _spawn_position: Vector3
-var _is_remote: bool = false
-
 const SPEED: float = 5.0
 const DOUBLE_TAP_TIME: float = 0.3
 const ROLL_SPEED: float = 60.0
@@ -71,6 +69,8 @@ var _pending_input: Dictionary = {}
 # Interpolation for remote player copies (smooth position from server authority)
 var _target_position: Vector3
 var _target_velocity: Vector3
+# Tracks whether _target_position has been set (avoids ambiguity with Vector3.ZERO)
+var _has_target: bool = false
 
 
 func _ready() -> void:
@@ -78,17 +78,17 @@ func _ready() -> void:
 	collision_mask = 1 | 2
 	_saved_mask = collision_mask
 
-	_is_remote = multiplayer.multiplayer_peer != null and get_multiplayer_authority() != multiplayer.get_unique_id()
-
-	# Godot 4.6 idiom: Authority is set in the spawn function and cascades automatically to all children
+	# Authority is set in the spawn function and cascades automatically to all children
 	# (recursive=true by default). RPCs on child nodes (Ultimate, Bow) route correctly because authority
 	# inherits from the Player root.
 	# Apply spawn position set by MultiplayerSpawner before we entered the scene tree.
 	# Can't set position inside the spawn_function because the node isn't in the tree yet.
+	# is_multiplayer_authority() is used throughout as the canonical guard —
+	# the owning peer controls the local copy, the server simulates remote copies.
 	if _spawn_position != Vector3():
 		global_position = _spawn_position
 
-	if _is_remote:
+	if not is_multiplayer_authority():
 		if camera_node:
 			camera_node.current = false
 			camera_node.remove_from_group("cameras")
@@ -195,7 +195,7 @@ func _setup_blink_effects() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	if event is InputEventMouseMotion and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		var mouse_event: InputEventMouseMotion = event as InputEventMouseMotion
@@ -247,9 +247,9 @@ func take_damage(amount: int) -> void:
 	health -= amount
 	health_changed.emit(health, max_health)
 	invincible_timer = 0.5
-	if not _is_remote:
+	if is_multiplayer_authority():
 		AudioManager.play_player_hit()
-	if _is_remote:
+	elif multiplayer.multiplayer_peer != null:
 		rpc_id(get_multiplayer_authority(), "_sync_health", health)
 	if health <= 0:
 		if multiplayer.multiplayer_peer == null:
@@ -271,7 +271,7 @@ func request_die() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _die() -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	health = 0
 	health_changed.emit(health, max_health)
@@ -283,7 +283,7 @@ func _respawn_after_delay() -> void:
 	if not is_instance_valid(self):
 		return
 	_respawn()
-	if _is_remote:
+	if multiplayer.multiplayer_peer != null and not is_multiplayer_authority():
 		rpc_id(get_multiplayer_authority(), "_respawn_client", _spawn_position)
 
 
@@ -315,7 +315,7 @@ func _respawn() -> void:
 
 
 func _on_slash_started() -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	var bow = get_node_or_null("Camera3D/Bow")
 	if bow:
@@ -323,14 +323,14 @@ func _on_slash_started() -> void:
 		bow.visible = false
 
 func _on_slash_completed() -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	var bow = get_node_or_null("Camera3D/Bow")
 	if bow:
 		bow.visible = true
 
 func _start_dash_slash() -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	if dash_cooldown > 0.0 or is_dashing:
 		return
@@ -356,7 +356,7 @@ func _is_double_tap(now: float, last_press: float) -> bool:
 	return now - last_press <= DOUBLE_TAP_TIME and now - last_press > 0.0 and not is_rolling and not is_dashing and roll_charges > 0
 
 func _start_roll(direction: Vector3) -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	if roll_charges <= 0 or is_rolling or is_dashing:
 		return
@@ -397,7 +397,7 @@ func _start_roll(direction: Vector3) -> void:
 	fov_tween.tween_property(camera_node, "fov", _original_fov, 0.2).set_ease(Tween.EASE_IN)
 
 func _on_jump_launched(charge: float) -> void:
-	if _is_remote:
+	if not is_multiplayer_authority():
 		return
 	AudioManager.play_jump(charge)
 	var fov_tween := create_tween()
@@ -411,13 +411,14 @@ func _on_jump_launched(charge: float) -> void:
 	bob_tween.tween_property(self, "_camera_bob_offset", 0.0, 0.4)
 
 func _physics_process(delta: float) -> void:
-	# Server simulates all players. For remote players, apply received input.
-	if multiplayer.is_server() and _is_remote:
+	# Server simulates remote players via input-forwarding;
+	# locally-controlled copies read input directly below.
+	if multiplayer.is_server() and not is_multiplayer_authority():
 		_server_simulate_remote(delta)
 		return
 
-	# Client-side remote copies: skip physics, animation is handled in _process.
-	if _is_remote:
+	# Non-authority copies on clients skip physics; animation is handled in _process.
+	if not is_multiplayer_authority():
 		return
 
 	# Shared timers for the locally-controlled copy.
@@ -598,24 +599,26 @@ func _server_simulate_remote(delta: float) -> void:
 # Clients apply it to remote copies; the owning client skips (uses prediction).
 @rpc("any_peer", "call_remote", "unreliable")
 func _sync_authoritative_state(pos: Vector3, vel: Vector3) -> void:
-	# Only the server (ID 1) can broadcast position updates
+	# Only the server (ID 1) may broadcast position updates
 	if multiplayer.get_remote_sender_id() != NetworkManager.SERVER_ID:
 		return
-	if get_multiplayer_authority() == multiplayer.get_unique_id():
+	# Never apply position corrections to a locally-controlled copy
+	if is_multiplayer_authority():
 		return
-	# Store target for interpolation (applied in _process)
 	_target_position = pos
 	_target_velocity = vel
+	_has_target = true
 
 
 func _process(delta: float) -> void:
+	# Server has the authoritative copy; all clients skip if they own the player.
 	if multiplayer.is_server():
 		return
-	if not _is_remote:
+	if is_multiplayer_authority():
 		return
 
 	# Interpolate toward the last received server position
-	if _target_position != Vector3.ZERO:
+	if _has_target:
 		global_position = global_position.lerp(_target_position, clampf(delta * 15.0, 0.0, 1.0))
 		velocity = _target_velocity
 
