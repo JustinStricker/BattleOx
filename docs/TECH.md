@@ -99,14 +99,117 @@ global_position = global_position.lerp(_target_position, clampf(delta * 15.0, 0.
 | 2 | Deterministic world sync | ✅ Complete |
 | 3 | Combat, zombies, collectibles sync | ✅ Complete |
 | 3.5 | EOS readiness + cleanup | ✅ Complete |
-| 4 | EOS auth, lobbies, P2P | 📋 Ready |
+| 4a | EOS Auth (Connect Interface) | 📋 Ready |
+| 4b | EOS Lobbies (quick-play matchmaking) | 📋 Ready |
+| 4c | EOS P2P transport swap | 📋 Ready |
+| 4d | EOS Stats + Leaderboards | 📋 Ready |
+| 4e | Player Data Storage (Survival saves) | 📋 Ready |
 
-### EOS Integration Steps
-1. Install `epic-online-services-godot` GDExtension
-2. Add EOS Auth (Device ID for dev, Epic Account for prod)
-3. Add EOS Lobbies for game creation/joining
-4. Swap `ENetMultiplayerPeer` → `EOSGMultiplayerPeer` in `network_manager.gd`
-5. Everything above transport stays the same
+---
+
+## EOS Integration
+
+### Service Map
+| Interface | BattleOx Use |
+|---|---|
+| Connect | Player authentication (Device ID dev, Epic Account prod) |
+| Lobbies | KOTH matchmaking — create, search, join, attribute filtering |
+| P2P | Game transport via EOSGMultiplayerPeer |
+| Stats | KOTH wins/losses per player |
+| Leaderboards | Ranked display from Stats |
+| Player Data Storage | Survival save/load |
+
+### Quick-Play Matchmaking (KOTH)
+
+No lobby browser. Single "Find KOTH Match" button. All EOS-native, no backend.
+
+#### Lobby Attribute Schema
+Set on lobby creation, public, searchable:
+
+| Key | Type | Search Op | Purpose |
+|---|---|---|---|
+| mode | string | EQ | "koth" |
+| status | string | EQ | "waiting" → "in_progress" |
+| min_mmr | int64 | LTE | Lower skill bound |
+| max_mmr | int64 | GTE | Upper skill bound |
+
+#### MMR Computation
+```gdscript
+# Client-side, derived from EOS Stats
+var mmr := 1000 + stats.koth_wins * 25 - stats.koth_losses * 25
+```
+First play (no stats): mmr = 1000.
+
+#### Client State Machine
+```
+IDLE → SEARCHING → IN_LOBBY → IN_MATCH → IDLE
+                        ↓
+              (host migration → IN_LOBBY)
+```
+
+#### SEARCHING Implementation
+```gdscript
+func _on_find_match_pressed():
+    enter_state(State.SEARCHING)
+    _search_timer.start(0.0)
+
+func _search_tick():
+    var bw = _bandwidth(_search_elapsed)
+    var search = HLobbies.create_lobby_search()
+    search.set_parameter("mode", "koth", EOS.ComparisonOp.EQ)
+    search.set_parameter("status", "waiting", EOS.ComparisonOp.EQ)
+    search.set_parameter("min_mmr", player_mmr - bw, EOS.ComparisonOp.GTE)
+    search.set_parameter("max_mmr", player_mmr + bw, EOS.ComparisonOp.LTE)
+    
+    var results = await search.find_async()
+    if results.size() > 0:
+        _join_lobby(results[0])
+    elif _search_elapsed > 10.0 and not _created_lobby:
+        _create_lobby()
+    
+    _search_timer.start(3.0)
+
+func _bandwidth(sec: float) -> int:
+    match sec:
+        x < 15.0: return 100
+        x < 30.0: return 200
+        x < 60.0: return 400
+        _:       return 99999
+```
+
+#### Lobby Lifecycle
+1. **Create**: host sets public attributes (mode, status, min_mmr, max_mmr)
+2. **Search**: clients query with MMR range filter, auto-join first result
+3. **Join**: joiner sets member attribute `mmr` on arrival
+4. **Validate**: host can reject joiner if MMR outside acceptable range (optional)
+5. **Start**: host sets status="in_progress", swaps ENet→EOSGMultiplayerPeer, match begins
+6. **Match**: P2P game runs via existing MultiplayerAPI (same RPCs, same spawners)
+7. **End**: host calls IngestStat for all players, leaves lobby
+8. **Cleanup**: lobby auto-disbands once last member leaves (EOS ~15 min if orphaned)
+
+#### Host Migration
+- **During lobby waiting**: EOS Lobby promotes next member to owner automatically. New host continues waiting.
+- **During active match**: match ends (listen server model — no host migration mid-game). Results may be lost.
+
+### Storage Architecture
+
+#### Survival Saves (Player Data Storage)
+- **File**: `survival_save_<slot>.json` (or Godot Resource format)
+- **Limits**: 200 MB/file, 400 MB/user, 1000 files/user, 1000 req/min
+- **Save triggers**: bed sleep, manual save, on quit, periodic autosave (60s, debounced)
+- **Load triggers**: Continue game, joining Survival session (load host's save)
+
+#### KOTH Stats (Stats Interface)
+- `koth_wins` (int64): cumulative wins
+- `koth_losses` (int64): cumulative losses
+- `koth_matches` (int64): total matches played
+- Written by host via `EOS_Stats_IngestStat` after match end
+- Read by clients for MMR computation + profile display
+
+#### KOTH Leaderboards
+- Created in Developer Portal, source: `koth_wins`
+- Aggregation: Sum (lifetime). Visibility: Global + friends.
+- Updates: Automatic from Stat ingestion — no manual sync needed.
 
 ---
 

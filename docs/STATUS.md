@@ -3,15 +3,14 @@
 ## ✅ Complete
 
 | Feature | Notes |
-|---|---|
+|---|---|---|
 | Shields | 150 cap, 3s delay, 25/s regen, all synergies |
 | Day/Night Cycle | 12min cycle, visual + gameplay effects |
-| King of the Hill | Zone scoring, zombie attraction, wave spawning |
+| Survival (PvE) | Zombies, collectibles, safehouse, crafting — implemented |
+| KOTH (PvP) | Zone scoring implemented as PvE (zombie waves) — needs PvP rework |
 | Biotics (Charge + Nova) | Shield-linked powers, upgrade trees |
-| Safehouse + Crafting | Workbenches, consumables, blocks, recipe unlocks |
 | Multiplayer (LAN) | Phases 1–3.5: player sync, world sync, combat sync, EOS readiness |
 | Skeleton Migration | All 5 phases: Skeleton3D bones, ragdoll, IK, debug viz |
-| Collectibles | 11 orbs, respawn, score system |
 | Combat | Bow (charged), sword (dash-slash) |
 | Enemies | 3 zombie types, state-machine AI, spawn system |
 
@@ -20,12 +19,16 @@
 ### EOS Integration (Multiplayer Phase 4)
 Replace ENet with Epic Online Services for internet play.
 
-1. Install `epic-online-services-godot` GDExtension
-2. Set up EOS credentials (ProductID, SandboxID, etc.)
-3. Add `eos_auth.gd` — platform init + login
-4. Add `eos_lobby.gd` — create/search/join lobbies
-5. Swap `ENetMultiplayerPeer` → `EOSGMultiplayerPeer`
-6. Replace IP fields in main menu with Epic sign-in + lobby browser
+1. Install `epic-online-services-godot` GDExtension — SDK+setup
+2. Set up EOS credentials in Developer Portal (ProductID, SandboxID, etc.)
+3. Add `eos_auth.gd` — Connect Interface login (Device ID dev, Epic Account prod)
+4. Add `eos_matchmaking.gd` — Quick-play: lobby search, create, join, attribute filtering, MMR widening
+5. Add `eos_stats.gd` — IngestStat for KOTH wins/losses, leaderboard query
+6. Add `eos_storage.gd` — Player Data Storage for Survival save/load
+7. Swap `ENetMultiplayerPeer` → `EOSGMultiplayerPeer` in network_manager.gd
+8. Replace LAN menu with Epic sign-in + "Find KOTH Match" button + Survival save slots
+9. Host migration handling for lobby owner disconnect during waiting phase
+10. Match end flow: stats ingest for all players → lobby disband → return to menu
 
 ### Volatiles
 Night-specific enemies. Requires day/night cycle (done). Gated: Warp unlock requires Volatile kills (5) — currently a circular dependency since Volatiles aren't implemented.
