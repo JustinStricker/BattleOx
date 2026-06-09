@@ -250,7 +250,7 @@ func _on_client_arrow_fired(origin: Vector3, direction: Vector3, speed: float) -
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_arrow(origin: Vector3, direction: Vector3, speed: float) -> void:
-	if not NetworkManager.is_host:
+	if not multiplayer.is_server():
 		return
 	ArrowScript.spawn_authoritative(arrow_container, origin, direction, speed)
 	rpc("_spawn_arrow_visual", origin, direction, speed)

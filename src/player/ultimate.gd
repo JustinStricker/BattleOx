@@ -89,12 +89,18 @@ func _request_ultimate(origin: Vector3, direction: Vector3) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable")
 func _sync_charge(val: float) -> void:
+	# Only the server can sync charge to the owning client
+	if multiplayer.get_remote_sender_id() != NetworkManager.SERVER_ID:
+		return
 	charge = val
 	charge_changed.emit(charge)
 
 
 @rpc("any_peer", "call_local", "reliable")
 func _spawn_ultimate_projectile(origin: Vector3, direction: Vector3) -> void:
+	# call_local — server broadcasts to all peers. Sender validation is not possible
+	# here since clients must also execute it. Security relies on the server being
+	# the only caller; rogue clients calling this would just spawn a visual-only projectile.
 	_spawn_projectile_at(origin, direction)
 
 

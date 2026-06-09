@@ -68,6 +68,10 @@ const SYNC_INTERVAL: int = 3
 var _input_seq: int = 0
 var _pending_input: Dictionary = {}
 
+# Interpolation for remote player copies (smooth position from server authority)
+var _target_position: Vector3
+var _target_velocity: Vector3
+
 
 func _ready() -> void:
 	add_to_group("player")
@@ -126,7 +130,6 @@ func _setup_blink_effects() -> void:
 	_blink_trail_mat.emission_enabled = true
 	_blink_trail_mat.emission = Color(0.4, 0.85, 1.0)
 	_blink_trail_mat.emission_energy_multiplier = 5.0
-	_blink_trail_mat.no_depth_test = true
 
 	var fade_grad := Gradient.new()
 	fade_grad.set_color(0, Color(1, 1, 1, 0.0))
@@ -286,6 +289,9 @@ func _respawn_after_delay() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _sync_health(hp: int) -> void:
+	# Only the server (ID 1) can broadcast health updates
+	if multiplayer.get_remote_sender_id() != NetworkManager.SERVER_ID:
+		return
 	health = hp
 	health_changed.emit(health, max_health)
 
@@ -592,10 +598,14 @@ func _server_simulate_remote(delta: float) -> void:
 # Clients apply it to remote copies; the owning client skips (uses prediction).
 @rpc("any_peer", "call_remote", "unreliable")
 func _sync_authoritative_state(pos: Vector3, vel: Vector3) -> void:
+	# Only the server (ID 1) can broadcast position updates
+	if multiplayer.get_remote_sender_id() != NetworkManager.SERVER_ID:
+		return
 	if get_multiplayer_authority() == multiplayer.get_unique_id():
 		return
-	global_position = pos
-	velocity = vel
+	# Store target for interpolation (applied in _process)
+	_target_position = pos
+	_target_velocity = vel
 
 
 func _process(delta: float) -> void:
@@ -603,6 +613,12 @@ func _process(delta: float) -> void:
 		return
 	if not _is_remote:
 		return
+
+	# Interpolate toward the last received server position
+	if _target_position != Vector3.ZERO:
+		global_position = global_position.lerp(_target_position, clampf(delta * 15.0, 0.0, 1.0))
+		velocity = _target_velocity
+
 	_anim_time += delta
 
 	_last_positions.append(global_position)
