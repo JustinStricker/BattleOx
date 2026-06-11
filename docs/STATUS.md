@@ -3,15 +3,15 @@
 ## ✅ Complete
 
 | Feature | Notes |
-|---|---|---|
+|---|---|
 | Shields | 150 cap, 3s delay, 25/s regen, all synergies |
 | Day/Night Cycle | 12min cycle, visual + gameplay effects |
 | Survival (PvE) | Zombies, collectibles, safehouse, crafting — implemented |
 | KOTH (PvP) | Zone scoring implemented as PvE (zombie waves) — needs PvP rework |
-| Biotics (Charge + Nova) | Shield-linked powers, upgrade trees |
+| Charge + Nova (legacy biotics) | Need rework into new ability system |
 | Multiplayer (LAN) | Phases 1–3.5: player sync, world sync, combat sync, EOS readiness |
 | Skeleton Migration | All 5 phases: Skeleton3D bones, ragdoll, IK, debug viz |
-| Combat | Bow (charged), sword (dash-slash) |
+| Combat | Bow (charged), sword (dash-slash) — baseline for expanded weapon system |
 | Enemies | 3 zombie types, state-machine AI, spawn system |
 
 ## 🔜 Next
@@ -30,11 +30,44 @@ Replace ENet with Epic Online Services for internet play.
 9. Host migration handling for lobby owner disconnect during waiting phase
 10. Match end flow: stats ingest for all players → lobby disband → return to menu
 
+### Ability System Rework (Overwatch + Mass Effect + RAGE)
+Replace legacy biotics with a broader ability framework:
+- **Loadout system**: 3 cooldown ability slots + Overdrive + Ultimate
+- **Primer/detonator combos**: Mass Effect-style synergies
+- **Overdrive**: RAGE-inspired temporary combat steroid (separate from Ultimate)
+- **Acquisition TBD**: find schematics vs pick-from-pool vs trees
+
+### RAGE-Inspired Weapon Overhaul
+- Alt-fire modes per weapon (unique secondary, not just zoom)
+- Weapon wheel and quick-swap
+- Wingstick (signature weapon)
+- Engineering schematics for weapon crafting/upgrades
+
+### Tool System (Roblox)
+- Universal Handle/Grip/activation framework
+- Refactor bow, sword, and all future weapons as Tool instances
+- Consumables and gadgets as Tools
+
+### Battle Royale Mode (TBD)
+Design phase. Storm circle, loot drops, last-standing loop. Squad support (solo/duo/squads).
+
+### Building System (TBD)
+Decision pending: Minecraft-style permanent block grid vs Fortnite-style combat building vs both vs neither.
+
+### Movement System (Titanfall 2 — TBD)
+Evaluate adding wall run, slide, double jump, and/or grapple to complement existing dash roll and charge jump. Would transform moment-to-moment feel across all modes.
+
+### Social Features (TBD)
+- Ping/communication system (Overwatch)
+- Scoreboard (Overwatch)
+- Party system (Fortnite)
+- Player customization (Roblox)
+
 ### Volatiles
 Night-specific enemies. Requires day/night cycle (done). Gated: Warp unlock requires Volatile kills (5) — currently a circular dependency since Volatiles aren't implemented.
 
-### Remaining Biotics
-Pull, Throw, Warp, Singularity, Bend Time, Dark Vision. Pull is a passive utility.
+### Remaining Legacy Biotics
+Pull, Throw, Warp, Singularity, Bend Time, Dark Vision — deferred. Re-evaluate as ability pool candidates when ability system is redesigned.
 
 ### Enchantments
 Tomes in Echo Zones. All tie into shield system (done).

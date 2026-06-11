@@ -1,19 +1,19 @@
 # Design Pillars
 
-## 1. Power Fantasy via Biotics
-The core combat identity is a biotic god, not a soldier. Shields let you regenerate between fights rather than chugging medkits. Powers are flashy, physics-driven, and combo-able (Pull → Throw, Warp → detonate).
+## 1. Ability-Fueled Gunplay
+The combat identity is a sci-fi power fantasy with heavy weapons. RAGE-inspired guns (unique weapons with alt-fire modes, not stat tiers) paired with Overwatch-style ability loadouts (3 cooldown slots + ultimate). Mass Effect primer/detonator combos create synergy within custom loadouts. Overdrive gives you a short-lived combat steroid (damage/speed/regen) that rewards aggressive play. Movement options (dash roll, charge jump, future wall run/grapple) make every encounter feel fluid.
 
-## 2. Rhythm of Risk/Reward
-Day is safer but less rewarding. Night is dangerous (faster zombies, volatiles) but offers shield regen bonuses and Volatile kills restore shields. Standing in the Hill zone increases scoring but attracts enemies. The game tempts you to push harder.
+## 2. Open-Ended Sandbox
+Creative freedom is core. Roblox-style tool system makes every equippable item a first-class Tool (Handle/Grip/activation). Building (Minecraft creative vs Fortnite combat building — TBD) lets players shape the world. Resource harvesting feeds the build/craft loop. The sandbox is where self-directed fun lives.
 
-## 3. Progression Through Play, Not Grind
-Biotic unlocks are achievement-based (complete a Hill hold, kill 5 Volatiles, survive 3 nights). Echo Shards are the only currency and upgrade existing powers rather than gate them. Enchantments are found in the world (Tomes in Echo Zones), not bought.
+## 3. Rhythm of Risk/Reward
+Day is safer but less rewarding. Night is dangerous (faster enemies, volatiles) with better rewards. Standing in the Hill zone increases scoring but draws attention. Battle Royale storm circle (TBD) creates the same push/pull. The game constantly tempts you to take risks.
 
-## 4. Crafting as Optional Depth
-Bandages, Medkits, Shield Injectors, and basic blocks are default recipes — you never need to craft to survive. The deeper system (furnace, brewing, enchanting) is there for players who want to engage with it.
+## 4. Progression Through Discovery
+Abilities, weapon schematics, and upgrades are found in the world — not earned via XP bars (RAGE engineering, Mass Exploration). Discovery drives you outward. What you find changes how you play rather than just raising numbers.
 
 ## 5. Survival Is About Positioning, Not Stats
-No armor. No damage resistance. Your survivability comes from shields (which regen if you avoid damage), movement abilities (roll, dash slash, jump), and biotic crowd control. Getting hit always matters — you just have tools to avoid it.
+No armor. No damage resistance. Your survivability comes from shields (regen if you avoid damage), movement abilities (roll, dash slash, jump), and ability crowd control. Getting hit always matters — you just have tools to avoid it.
 
 ## Mood
 Low-poly procedural world with chiptune-style procedural audio. Bright day / dangerous night. The aesthetic is "what if a Game Boy Advance had a 3D accelerator."

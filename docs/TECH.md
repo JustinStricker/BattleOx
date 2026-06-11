@@ -2,19 +2,20 @@
 
 **Engine**: Godot 4.6 | **Physics**: Jolt | **Renderer**: Forward Plus
 
-## Scene Tree (Runtime)
+---
+
+## Scene Tree (Runtime, Survival Mode)
 
 ```
 bootstrap.tscn (Node3D)
-└── Game (game.gd)
+└── Game (survival.gd)
     ├── LoadingScreen (CanvasLayer)
     ├── WorldGen (world_generator.gd)
     ├── Environment (environment.gd)
     │   ├── WorldEnvironment (sky, SSAO, glow, tonemapping)
     │   ├── DirectionalLight3D (sun, shadows)
     │   ├── DirectionalLight3D (ambient fill)
-    │   ├── TerrainMesh (MeshInstance3D)
-    │   ├── TerrainCollision (StaticBody3D)
+    │   ├── TerrainMesh (chunk_manager.gd + terrain_chunk.gd)
     │   ├── Water (MeshInstance3D)
     │   ├── MultiMeshInstance3D (trees, grass)
     │   ├── Clouds (60 MeshInstances)
@@ -22,47 +23,131 @@ bootstrap.tscn (Node3D)
     ├── Player (player.tscn)
     │   ├── Camera3D
     │   │   ├── Bow (bow.gd)
-    │   │   └── SwordSlash (sword_slash.gd)
+    │   │   ├── SwordSlash (sword_slash.gd)
+    │   │   ├── Wings (wings.gd)
+    │   │   └── Ultimate (ultimate.gd)
     │   └── Meshes (torso, head, eyes)
     ├── UI (ui.tscn)
     ├── Arrows (Node3D container)
     ├── CollectibleManager (collectible_manager.gd)
-    ├── ZombieManager (zombie_manager.gd)
-    │   └── Zombie × 0–30 (zombie.tscn)
+    ├── EnemyManager (enemy_manager.gd)
+    │   └── Enemy × 0–60 (enemy.tscn)
+    │       ├── HealthComponent
+    │       ├── PerceptionComponent
+    │       ├── MovementComponent
+    │       ├── AIStateMachine
+    │       ├── MultiplayerSynchronizer
+    │       └── EnemySkeleton (DireWolf / Wraith / StoneGolem)
+    ├── AudioManager (autoload)
+    ├── MusicManager (autoload)
     └── NetworkManager (autoload)
 ```
 
+---
+
 ## Startup Sequence
 
-1. `bootstrap.gd` creates `Game` node
-2. `Game._ready()` runs sequentially:
-   - Create `LoadingScreen`
-   - Create `WorldGen` (noise init)
-   - Create `Environment` (terrain, vegetation, villages)
-   - Create `Player` at spawn point
-   - Attach `Bow` + `SwordSlash` to camera
-   - Create `UI`
-   - Create `Arrows`, `CollectibleManager`, `ZombieManager`
+1. `bootstrap.gd` creates Game node with survival mode.
+2. `survival.gd._ready()` runs sequentially:
+   - Create LoadingScreen overlay
+   - Create WorldGen (noise initialization)
+   - Mode: host creates Environment (terrain, vegetation, villages), world config synced to clients via RPC
+   - Mode: client receives world config, builds terrain locally
+   - Create Player at spawn point (spawned via MultiplayerSpawner on host)
+   - Attach Bow, SwordSlash, Wings, Ultimate to Camera3D
+   - Create UI, Arrows container, CollectibleManager, EnemyManager
    - Fade loading screen, capture mouse
+
+---
+
+## Entity System Architecture
+
+### Enemies (Component-Based)
+
+Each enemy is an `enemy.tscn` scene with a CharacterBody3D root and child component nodes:
+
+| Component | Role |
+|---|---|
+| **HealthComponent** | HP pool, invulnerability timer, damaged/died signals |
+| **PerceptionComponent** | Nearest player, per-frame cached LOS raycast |
+| **MovementComponent** | Gravity, move_toward, face_target, ground_height |
+| **AIStateMachine** | 4-state FSM (IDLE→WANDER→CHASE→ATTACK), ranged projectile creation |
+| **MultiplayerSynchronizer** | Replicates position, rotation, health |
+
+At runtime, an **EnemySkeleton** subclass is created dynamically based on type:
+
+```
+EnemySkeleton (Node3D) — abstract base
+├── Skeleton3D (procedural bone hierarchy)
+├── BoneAttachment3D ×N (meshes on bones)
+├── PhysicalBoneSimulator3D (ragdoll death)
+├── FootPlacementModifier3D (IK, ground enemies)
+└── HandTargetModifier3D (IK, stone golem)
+```
+
+| Skeleton | Bones | Type | Notes |
+|---|---|---|---|
+| **DireWolfSkeleton** | 15 | Quadruped | Melee, foot IK (4 feet) |
+| **WraithSkeleton** | 12 | Floating orb | Ranged, energy bolt projectiles |
+| **StoneGolemSkeleton** | 15 | Bipedal | Melee, foot IK (2 feet), hand IK punch |
+
+State machine: transitions based on distance + line-of-sight. Ranged enemies fire dynamically-created projectile RigidBody3Ds. Death uses PhysicalBoneSimulator3D ragdoll or tween collapse.
+
+### Player Weapons
+
+All weapons are Node3D children of Camera3D in `player.tscn`:
+
+| Weapon | Class | Lines | Role |
+|---|---|---|---|
+| Bow | `bow.gd` | 474 | Chargeable projectile, procedural recurve mesh |
+| Sword | `sword_slash.gd` | 542 | 3-phase iaijutsu slash, procedural katana |
+| Wings | `wings.gd` | 495 | Procedural energy wings, jump assist |
+| Ultimate | `ultimate.gd` | 144 | Charge via damage, beam projectile on F key |
+
+Arrow factory (`arrow.gd`) is a static script producing RigidBody3D projectiles with procedural shaft/tip/fletching mesh + GPUParticles3D trail.
+
+### World Generation
+
+Dual system:
+- **Original**: Single 200×200 vertex terrain mesh with Perlin FBM noise, 5 biomes (Ocean, Meadows, Black Forest, Swamp, Mountain), procedural villages, MultiMesh vegetation.
+- **Chunk system** (newer): `ChunkManager` + `TerrainChunk` — 64-unit chunks, 3-load-radius, thread-pool generation, mesh/collision pooling. Overrides the original terrain.
+
+Day/night cycle drives ProceduralSkyMaterial + DirectionalLight3D rotation. SSAO, ACES tonemapping, glow/bloom.
+
+---
+
+## Shaders (5 Custom)
+
+| Shader | Type | Purpose |
+|---|---|---|
+| `terrain.gdshader` | spatial | Terrain vertex color + snow blend + normal perturbation |
+| `water.gdshader` | spatial | Gerstner wave vertex displacement, depth color, foam |
+| `clouds.gdshader` | spatial | FBM noise cloud billboards with drift |
+| `wind_foliage.gdshader` | spatial | Noise-driven vertex sway for grass/trees |
+| `beam.gdshader` | spatial | Ultimate energy beam — scrolling bands, FBM distortion, emission |
+
+---
 
 ## Networking
 
 ### Transport Layer
-`NetworkManager` (autoload) abstracts the transport. Game code uses `multiplayer` API + RPCs only — never the peer directly.
+
+`NetworkManager` (autoload) abstracts transport. Game code uses `multiplayer` API + RPCs only.
 
 ```
 MultiplayerAPI  ← same RPCs/spawners/synchronizers
      ↕
 MultiplayerPeer  ← abstract interface
      ↕
-ENetMultiplayerPeer    or    EOS P2P MultiplayerPeer
+ENetMultiplayerPeer    or    EOSGMultiplayerPeer
      ↕                           ↕
 Direct UDP/IP               Epic relay + NAT punch
 ```
 
-**Model**: Listen server (one player hosts, others connect)
+**Model**: Listen server (one player hosts, others connect). Transport switchable via enum (`ENET_LAN`, `EOS_P2P`).
 
 ### Entity Sync
+
 | Entity | Method | Why |
 |---|---|---|
 | Player | Custom RPCs (input forwarding → authoritative state) | Foundation for client-side prediction |
@@ -72,59 +157,96 @@ Direct UDP/IP               Epic relay + NAT punch
 | Combat | RPCs | Discrete events |
 
 ### Authority
+
 | Entity | Authority |
 |---|---|
 | Server | All game logic, AI, physics |
-| Player characters | Owning client (`set_multiplayer_authority`) |
+| Player characters | Owning client |
 | Enemies | Server |
 | World seed | Server |
 
-### Security
-```gdscript
-# Server-only RPC validation
-if multiplayer.get_remote_sender_id() != NetworkManager.SERVER_ID:
-    return
-```
-`@rpc("authority")` functions are inherently safe.
-
 ### Interpolation (Remote Players)
+
 ```gdscript
 global_position = global_position.lerp(_target_position, clampf(delta * 15.0, 0.0, 1.0))
 ```
-
-### Deployment Plan
-| Phase | Scope | Status |
-|---|---|---|
-| 1 | Network infra + player sync | ✅ Complete |
-| 2 | Deterministic world sync | ✅ Complete |
-| 3 | Combat, zombies, collectibles sync | ✅ Complete |
-| 3.5 | EOS readiness + cleanup | ✅ Complete |
-| 4a | EOS Auth (Connect Interface) | 📋 Ready |
-| 4b | EOS Lobbies (quick-play matchmaking) | 📋 Ready |
-| 4c | EOS P2P transport swap | 📋 Ready |
-| 4d | EOS Stats + Leaderboards | 📋 Ready |
-| 4e | Player Data Storage (Survival saves) | 📋 Ready |
 
 ---
 
 ## EOS Integration
 
 ### Service Map
+
 | Interface | BattleOx Use |
 |---|---|
 | Connect | Player authentication (Device ID dev, Epic Account prod) |
-| Lobbies | KOTH matchmaking — create, search, join, attribute filtering |
+| Lobbies | KOTH + Battle Royale match discovery + lifecycle |
 | P2P | Game transport via EOSGMultiplayerPeer |
-| Stats | KOTH wins/losses per player |
+| Stats | KOTH / BR win/loss/kill tracking |
 | Leaderboards | Ranked display from Stats |
 | Player Data Storage | Survival save/load |
 
+### Progression-Light Storage Model
+
+Survival progression is a single flat blob — no XP, no skill trees, no biome gates.
+
+**Survival Save Blob (EOS Player Data Storage)**:
+
+```json
+{
+  "version": 1,
+  "schematics": {
+    "abilities": ["pull", "throw", "charge"],
+    "weapons": ["bow", "wingstick"],
+    "upgrades": ["rapid_regen", "shield_capacity_1"]
+  },
+  "enchantments": ["shield_capacity_1", "quick_restore"],
+  "inventory": {
+    "echo_shards": 47,
+    "materials": { "wood": 120, "stone": 64, "cloth": 12 }
+  },
+  "base_blocks": {
+    "size": [32, 16, 16],
+    "run_length_data": "..."
+  },
+  "stats": {
+    "survival_time": 43200,
+    "zombie_kills": 89
+  }
+}
+```
+
+- **Limit**: ~1MB per blob (EOS quota: 200MB/file, 400MB/user, 1000 files/user)
+- **Base block volume**: capped at 32×16×16 units. Run-length encoding keeps it ~16KB at max density.
+- **Auth**: Player-authoritative (tamperable by design — PvE sandbox, integrity doesn't matter)
+- **Save triggers**: bed sleep, manual save, on quit, periodic autosave (60s, debounced)
+- **Load triggers**: Continue game, joining Survival session (load host's save)
+
+**KOTH Stats (EOS Stats Interface)**:
+
+```
+koth_wins: int64     — written by host post-match
+koth_losses: int64   — written by host post-match
+koth_matches: int64  — written by host post-match
+```
+
+All players: `mmr = 1000 + wins×25 − losses×25`. Client-derived from Stats.
+
+**Battle Royale Stats (EOS Stats Interface)**:
+
+```
+br_wins: int64       — written by host post-match
+br_kills: int64      — written by host post-match
+br_matches: int64    — written by host post-match
+```
+
+**Leaderboards**: Created in Developer Portal, source stat per mode. Aggregation: Sum. Visibility: Global + friends.
+
 ### Quick-Play Matchmaking (KOTH)
 
-No lobby browser. Single "Find KOTH Match" button. All EOS-native, no backend.
+Single "Find KOTH Match" button. No lobby browser. EOS-native.
 
-#### Lobby Attribute Schema
-Set on lobby creation, public, searchable:
+**Lobby Attribute Schema**:
 
 | Key | Type | Search Op | Purpose |
 |---|---|---|---|
@@ -133,105 +255,66 @@ Set on lobby creation, public, searchable:
 | min_mmr | int64 | LTE | Lower skill bound |
 | max_mmr | int64 | GTE | Upper skill bound |
 
-#### MMR Computation
-```gdscript
-# Client-side, derived from EOS Stats
-var mmr := 1000 + stats.koth_wins * 25 - stats.koth_losses * 25
-```
-First play (no stats): mmr = 1000.
+**Client State Machine**: `IDLE → SEARCHING → IN_LOBBY → IN_MATCH → IDLE`
 
-#### Client State Machine
-```
-IDLE → SEARCHING → IN_LOBBY → IN_MATCH → IDLE
-                        ↓
-              (host migration → IN_LOBBY)
-```
+**MMR Bandwidth Widening**:
 
-#### SEARCHING Implementation
-```gdscript
-func _on_find_match_pressed():
-    enter_state(State.SEARCHING)
-    _search_timer.start(0.0)
+| 0–15s | 15–30s | 30–60s | 60s+ |
+|---|---|---|---|
+| ±100 | ±200 | ±400 | No limit |
 
-func _search_tick():
-    var bw = _bandwidth(_search_elapsed)
-    var search = HLobbies.create_lobby_search()
-    search.set_parameter("mode", "koth", EOS.ComparisonOp.EQ)
-    search.set_parameter("status", "waiting", EOS.ComparisonOp.EQ)
-    search.set_parameter("min_mmr", player_mmr - bw, EOS.ComparisonOp.GTE)
-    search.set_parameter("max_mmr", player_mmr + bw, EOS.ComparisonOp.LTE)
-    
-    var results = await search.find_async()
-    if results.size() > 0:
-        _join_lobby(results[0])
-    elif _search_elapsed > 10.0 and not _created_lobby:
-        _create_lobby()
-    
-    _search_timer.start(3.0)
+### Planned: Battle Royale Matchmaking
 
-func _bandwidth(sec: float) -> int:
-    match sec:
-        x < 15.0: return 100
-        x < 30.0: return 200
-        x < 60.0: return 400
-        _:       return 99999
-```
+Same EOS Lobbies flow with `mode="br"`. Squad sizes 1-4. Lobby attribute: `squad_size`.
 
-#### Lobby Lifecycle
-1. **Create**: host sets public attributes (mode, status, min_mmr, max_mmr)
-2. **Search**: clients query with MMR range filter, auto-join first result
-3. **Join**: joiner sets member attribute `mmr` on arrival
-4. **Validate**: host can reject joiner if MMR outside acceptable range (optional)
-5. **Start**: host sets status="in_progress", swaps ENet→EOSGMultiplayerPeer, match begins
-6. **Match**: P2P game runs via existing MultiplayerAPI (same RPCs, same spawners)
-7. **End**: host calls IngestStat for all players, leaves lobby
-8. **Cleanup**: lobby auto-disbands once last member leaves (EOS ~15 min if orphaned)
+### Host Migration
 
-#### Host Migration
 - **During lobby waiting**: EOS Lobby promotes next member to owner automatically. New host continues waiting.
 - **During active match**: match ends (listen server model — no host migration mid-game). Results may be lost.
 
-### Storage Architecture
-
-#### Survival Saves (Player Data Storage)
-- **File**: `survival_save_<slot>.json` (or Godot Resource format)
-- **Limits**: 200 MB/file, 400 MB/user, 1000 files/user, 1000 req/min
-- **Save triggers**: bed sleep, manual save, on quit, periodic autosave (60s, debounced)
-- **Load triggers**: Continue game, joining Survival session (load host's save)
-
-#### KOTH Stats (Stats Interface)
-- `koth_wins` (int64): cumulative wins
-- `koth_losses` (int64): cumulative losses
-- `koth_matches` (int64): total matches played
-- Written by host via `EOS_Stats_IngestStat` after match end
-- Read by clients for MMR computation + profile display
-
-#### KOTH Leaderboards
-- Created in Developer Portal, source: `koth_wins`
-- Aggregation: Sum (lifetime). Visibility: Global + friends.
-- Updates: Automatic from Stat ingestion — no manual sync needed.
-
 ---
 
-## Godot Systems Audit
+## Planned Architecture
 
-### In Use (keep these)
+### Ability System (Overwatch + Mass Effect + RAGE)
+
+Replaces legacy Biotics. Loadout-based: 3 ability slots + Overdrive + Ultimate.
+
+If schematic-based acquisition: discovered abilities stored as boolean flags in Survival blob. At runtime, `AbilityManager` (new autoload or mode-level node) manages hotkey bindings, cooldowns, and primer/detonator state.
+
+Overdrive system separate from Ultimate charge — uses its own resource pool built via combat activity. ~15s cooldown, ~6s duration.
+
+### Tool System (Roblox)
+
+All equippable items become **Tool** instances with Handle (3D mesh), Grip (hand offset), and Activation (primary/alt fire). Tool scene template:
+
+```
+Tool (Node3D)
+├── Handle (MeshInstance3D)
+├── Grip (Node3D — position/rotation offset)
+├── Activator (Area3D or RayCast — context-dependent use)
+└── Properties (resource — damage, cooldown, ammo, schematic_id, rarity)
+```
+
+Bow and Sword refactored into Tool instances. New weapons (Wingstick, Assault Rifle, etc.) implement the same interface.
+
+### RAGE Weapon System
+
+Each weapon has distinct primary + alt-fire. Rarity system (Common→Legendary) adds passive modifiers without stat tiers. Weapons found as schematics and crafted. Weapon wheel for quick-swap.
+
+### Godot Systems Used
+
 | System | Where |
 |---|---|
 | `SurfaceTool` + `ArrayMesh` | Procedural meshes across all entities |
-| `MultiMesh` / `MultiMeshInstance3D` | Clouds, trees, foliage |
+| `MultiMeshInstance3D` | Clouds, trees, foliage |
 | `ProceduralSkyMaterial` | Day/night sky dome |
-| `ShaderMaterial` | Terrain, water, cloud, wind shaders |
+| `ShaderMaterial` | Terrain, water, cloud, wind, beam shaders |
 | `Tween` | Death animations, sword slash, camera shake |
 | `RigidBody3D` | Arrow projectiles, death explosion debris |
 | `CPUParticles3D` / `GPUParticles3D` | Smoke, blood, trails, embers |
-
-### Migration Summary
-All planned migrations are complete:
-- **Node3D pivots → Skeleton3D bones** (3 enemy types)
-- **Tween deaths → PhysicalBone3D ragdoll**
-- **Custom IK → SkeletonModifier3D** (foot placement + hand targeting)
-- **ImmediateMesh** → KOTH zone + debug visualization
-
-### Deferred
-See `STATUS.md` for AnimationPlayer, AnimationTree, GridMap, Path3D.
+| `Skeleton3D` + `PhysicalBoneSimulator3D` | Enemy skeleton system, ragdoll death |
+| `SkeletonModifier3D` | Foot placement + hand targeting IK |
+| `MultiplayerSynchronizer` | Enemy state replication |
+| `MultiplayerSpawner` | Player spawning in multiplayer |
+| `WorkerThreadPool` | Chunk terrain generation |
