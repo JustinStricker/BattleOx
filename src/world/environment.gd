@@ -272,78 +272,126 @@ func _add_leaf_cluster(st: SurfaceTool, center: Vector3, radius: float, count: i
 					st.set_color(leaf_col); st.set_normal(n2); st.set_uv(Vector2(0, 0)); st.add_vertex(p2)
 					st.set_color(leaf_col); st.set_normal(n3); st.set_uv(Vector2(0, 0)); st.add_vertex(p3)
 
-func _build_tree_branched(st: SurfaceTool, origin: Vector3, dir: Vector3, length: float, thickness: float, depth: int, wood_col: Color, leaf_col: Color, rng: Array) -> void:
-	var end := origin + dir * length
-	_make_cylinder_segment(st, origin, end, thickness, thickness * 0.6, 5, wood_col)
+func _make_platform_branch_mesh(st: SurfaceTool, p0: Vector3, p1: Vector3, radius_h: float, radius_v: float, segments: int, col: Color) -> void:
+	var dir := (p1 - p0).normalized()
+	var up := Vector3.UP if abs(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var right := dir.cross(up).normalized()
+	up = right.cross(dir).normalized()
 
-	if depth <= 0:
-		_add_leaf_cluster(st, end, length * 0.5, 3, leaf_col)
-		return
+	for i in segments:
+		var a0 := float(i) / segments * TAU
+		var a1 := float(i + 1) / segments * TAU
+		var c0 := cos(a0); var s0 := sin(a0)
+		var c1 := cos(a1); var s1 := sin(a1)
 
-	var rng_seed: int = rng[0]
-	var num_branches: int = rng_seed % 2 + 2
-	rng_seed = (rng_seed * 1103515245 + 12345) & 0x7fffffff
+		var v0 := p0 + c0 * right * radius_h + s0 * up * radius_v
+		var v1 := p0 + c1 * right * radius_h + s1 * up * radius_v
+		var v2 := p1 + c0 * right * radius_h + s0 * up * radius_v
+		var v3 := p1 + c1 * right * radius_h + s1 * up * radius_v
 
-	for i in num_branches:
-		var b_angle: float = float(i) / num_branches * TAU + (rng_seed % 1000) * 0.001
-		rng_seed = (rng_seed * 1103515245 + 12345) & 0x7fffffff
-		var b_pitch: float = 0.4 + (rng_seed % 1000) * 0.0006
-		rng_seed = (rng_seed * 1103515245 + 12345) & 0x7fffffff
-		var b_len: float = length * (0.5 + (rng_seed % 1000) * 0.0003)
-		rng_seed = (rng_seed * 1103515245 + 12345) & 0x7fffffff
-		var b_thick: float = thickness * (0.35 + (rng_seed % 1000) * 0.00025)
+		var n0 := (c0 * right + s0 * up).normalized()
+		var n1 := (c1 * right + s1 * up).normalized()
 
-		var up_ref := Vector3.UP if abs(dir.y) < 0.9 else Vector3.RIGHT
-		var right := dir.cross(up_ref).normalized()
-		var forward := right.cross(dir).normalized()
+		for data in [
+			[v0, n0], [v1, n1], [v2, n0],
+			[v1, n1], [v3, n1], [v2, n0],
+		]:
+			st.set_color(col)
+			st.set_normal(data[1])
+			st.set_uv(Vector2(0, 0))
+			st.add_vertex(data[0])
 
-		var new_dir: Vector3 = (dir * 0.6 + right * sin(b_angle) * b_pitch + forward * cos(b_angle) * b_pitch).normalized()
-		_build_tree_branched(st, end, new_dir, b_len, b_thick, depth - 1, wood_col, leaf_col, rng)
-	rng[0] = rng_seed
+func _make_branch_platform_collision(origin: Vector3, direction: Vector3, length: float, width: float, height: float) -> Dictionary:
+	var box := BoxShape3D.new()
+	box.size = Vector3(width, height, length)
+	var t := Transform3D.IDENTITY
+	t.origin = origin + direction * (length * 0.5)
+	var up_hint := Vector3.UP
+	if abs(direction.dot(Vector3.UP)) > 0.99:
+		up_hint = Vector3.RIGHT
+	t.basis = Basis.looking_at(direction, up_hint)
+	return {"shape": box, "local_transform": t}
 
-func _make_tree_mesh_oak(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D, seed_offset: int) -> ArrayMesh:
+func _build_tree_platforms(st: SurfaceTool, trunk_origin: Vector3, tiers: Array, wood_col: Color, leaf_col: Color, rng_seed: int, collision_out: Array) -> int:
+	for tier in tiers:
+		var tier_y: float = tier["y"]
+		var branch_count: int = tier["count"]
+		var branch_length: float = tier["length"]
+		var branch_width: float = tier["width"]
+
+		for i in branch_count:
+			var angle: float = float(i) / branch_count * TAU + (rng_seed % 1000) * 0.001
+			rng_seed = (rng_seed * 1103515245 + 12345) & 0x7fffffff
+
+			var horizontal_dir := Vector3(cos(angle), 0, sin(angle)).normalized()
+			var branch_dir := (horizontal_dir + Vector3.UP * 0.12).normalized()
+
+			var branch_origin := trunk_origin + Vector3(0, tier_y, 0)
+			var branch_tip := branch_origin + branch_dir * branch_length
+
+			_make_platform_branch_mesh(st, branch_origin, branch_tip, branch_width * 0.5, 0.3, 8, wood_col)
+			collision_out.append(_make_branch_platform_collision(branch_origin, branch_dir, branch_length, branch_width, 0.5))
+
+			_add_leaf_cluster(st, branch_tip, 1.5, 3, leaf_col)
+	return rng_seed
+
+func _make_tree_mesh_oak(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D, seed_offset: int) -> Dictionary:
 	var st: SurfaceTool = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rng: Array = [seed_offset]
-	_build_tree_branched(st, Vector3.ZERO, Vector3.UP, 4.0 + (seed_offset % 100) * 0.01, 0.25 + (seed_offset % 50) * 0.002, 3, wood_mat.albedo_color, leaf_mat.albedo_color, rng)
+	var collision_data: Array = []
+	var trunk_h := 16.0 + (seed_offset % 100) * 0.04
+	var trunk_r := 1.2 + (seed_offset % 50) * 0.004
+	var wood_col := wood_mat.albedo_color
+	var leaf_col := leaf_mat.albedo_color
+
+	_make_cylinder_segment(st, Vector3.ZERO, Vector3.UP * trunk_h, trunk_r, trunk_r * 0.7, 10, wood_col)
+
+	var tiers: Array[Dictionary] = [
+		{"y": 6.0, "count": 3, "length": 7.0, "width": 2.8},
+		{"y": 10.0, "count": 3, "length": 6.0, "width": 2.5},
+		{"y": 14.0, "count": 3, "length": 5.0, "width": 2.2},
+	]
+	_build_tree_platforms(st, Vector3.ZERO, tiers, wood_col, leaf_col, seed_offset, collision_data)
+
+	_add_leaf_cluster(st, Vector3.UP * trunk_h, 4.0, 6, leaf_col)
+
+	var trunk := CylinderShape3D.new()
+	trunk.radius = trunk_r
+	trunk.height = trunk_h
+	collision_data.append({"shape": trunk, "local_transform": Transform3D.IDENTITY})
+
 	var mesh := st.commit()
 	wood_mat.vertex_color_use_as_albedo = true
 	mesh.surface_set_material(0, wood_mat)
-	return mesh
+	return {"mesh": mesh, "collision": collision_data}
 
-func _make_tree_mesh_pine(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D) -> ArrayMesh:
+func _make_tree_mesh_pine(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D) -> Dictionary:
 	var st: SurfaceTool = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var trunk_h := 6.0
-	var trunk_r := 0.15
-	var segs := 6
-	var trunk_col := wood_mat.albedo_color
+	var trunk_h := 25.0
+	var trunk_r := 0.7
+	var wood_col := wood_mat.albedo_color
 	var leaf_col := leaf_mat.albedo_color
+	var collision_data: Array = []
 
-	for i in segs:
-		var a0 := float(i) / segs * TAU
-		var a1 := float(i + 1) / segs * TAU
-		var c0 := cos(a0); var s0 := sin(a0)
-		var c1 := cos(a1); var s1 := sin(a1)
-		var bot := Vector3(c0 * trunk_r, 0, s0 * trunk_r)
-		var bot2 := Vector3(c1 * trunk_r, 0, s1 * trunk_r)
-		var top := Vector3(c0 * trunk_r * 0.3, trunk_h, s0 * trunk_r * 0.3)
-		var top2 := Vector3(c1 * trunk_r * 0.3, trunk_h, s1 * trunk_r * 0.3)
-		var n := Vector3(c0, 0, s0).normalized()
-		var n2 := Vector3(c1, 0, s1).normalized()
-		for data in [[bot, n], [bot2, n2], [top, n],
-					 [bot2, n2], [top2, n2], [top, n]]:
-			st.set_color(trunk_col); st.set_normal(data[1]); st.set_uv(Vector2(0, 0)); st.add_vertex(data[0])
+	_make_cylinder_segment(st, Vector3.ZERO, Vector3.UP * trunk_h, trunk_r, trunk_r * 0.3, 8, wood_col)
 
-	var tiers := 4
-	for ti in tiers:
-		var ty := 1.0 + float(ti) / tiers * (trunk_h - 1.5)
-		var t_radius := 0.8 + (1.0 - float(ti) / tiers) * 0.6
+	var tiers: Array[Dictionary] = [
+		{"y": 4.0, "count": 2, "length": 5.0, "width": 2.0},
+		{"y": 9.0, "count": 3, "length": 5.0, "width": 2.0},
+		{"y": 14.0, "count": 3, "length": 4.5, "width": 1.8},
+		{"y": 19.0, "count": 2, "length": 4.0, "width": 1.6},
+	]
+	_build_tree_platforms(st, Vector3.ZERO, tiers, wood_col, leaf_col, 42, collision_data)
+
+	var tiers_foliage := 6
+	for ti in tiers_foliage:
+		var ty := 3.0 + float(ti) / tiers_foliage * (trunk_h - 5.0)
+		var t_radius := 2.0 + (1.0 - float(ti) / tiers_foliage) * 1.5
 		var bottom_r := t_radius * 0.6
 		var top_r := t_radius * 0.05
-		var cone_h := 0.8 + (1.0 - float(ti) / tiers) * 0.4
-
-		var sub_segs: int = mini(6 + ti * 2, 10)
+		var cone_h := 2.0 + (1.0 - float(ti) / tiers_foliage) * 1.0
+		var sub_segs: int = mini(8 + ti * 2, 14)
 		for j in sub_segs:
 			var a0 := float(j) / sub_segs * TAU
 			var a1 := float(j + 1) / sub_segs * TAU
@@ -359,38 +407,120 @@ func _make_tree_mesh_pine(wood_mat: StandardMaterial3D, leaf_mat: StandardMateri
 						 [p1, n1], [p3, n1], [p2, n0]]:
 				st.set_color(leaf_col); st.set_normal(data[1]); st.set_uv(Vector2(0, 0)); st.add_vertex(data[0])
 
+	var trunk := CylinderShape3D.new()
+	trunk.radius = trunk_r
+	trunk.height = trunk_h
+	collision_data.append({"shape": trunk, "local_transform": Transform3D.IDENTITY})
+
 	var mesh := st.commit()
 	wood_mat.vertex_color_use_as_albedo = true
 	mesh.surface_set_material(0, wood_mat)
-	return mesh
+	return {"mesh": mesh, "collision": collision_data}
 
-func _make_tree_mesh_swamp(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D, seed_offset: int) -> ArrayMesh:
+func _make_tree_mesh_swamp(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D, seed_offset: int) -> Dictionary:
 	var st: SurfaceTool = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rng: Array = [seed_offset + 999]
+	var trunk_h: float = 12.0 + (rng[0] % 200) * 0.03
+	var trunk_r := 0.8
+	var collision_data: Array = []
+	var wood_col := wood_mat.albedo_color
+	var leaf_col := leaf_mat.albedo_color
+	var num_segs := 7
+	var bend_x := 0.0
+	var bend_z := 0.0
 
-	var trunk_h: float = 3.0 + (rng[0] % 200) * 0.01
-	var trunk_r := 0.12
-	var bend_x: float = 0.0
-	var bend_z: float = 0.0
-	for i in 5:
-		bend_x = sin(float(i) * 1.3) * 0.3
-		bend_z = cos(float(i) * 1.3) * 0.3
-		_make_cylinder_segment(st,
-			Vector3(0, float(i) / 5 * trunk_h, 0),
-			Vector3(bend_x * 0.1, float(i + 1) / 5 * trunk_h, bend_z * 0.1),
-			trunk_r * (1.0 - float(i) / 5 * 0.5),
-			trunk_r * (1.0 - float(i + 1) / 5 * 0.5),
-			5, wood_mat.albedo_color)
+	for i in num_segs:
+		bend_x = sin(float(i) * 1.3) * 0.6
+		bend_z = cos(float(i) * 1.3) * 0.6
+		var seg_start := Vector3(0, float(i) / num_segs * trunk_h, 0)
+		var seg_end := Vector3(bend_x * 0.15, float(i + 1) / num_segs * trunk_h, bend_z * 0.15)
+		_make_cylinder_segment(st, seg_start, seg_end,
+			trunk_r * (1.0 - float(i) / num_segs * 0.4),
+			trunk_r * (1.0 - float(i + 1) / num_segs * 0.4),
+			7, wood_col)
 
-	var top_pos := Vector3(bend_x * 0.1, trunk_h, bend_z * 0.1)
-	_add_leaf_cluster(st, top_pos, 0.8, 4, leaf_mat.albedo_color)
-	_add_leaf_cluster(st, top_pos + Vector3(0.3, -0.2, 0.3), 0.5, 3, leaf_mat.albedo_color)
+		var seg_len := seg_start.distance_to(seg_end)
+		var seg_radius := trunk_r * (1.0 - float(i) / num_segs * 0.4)
+		var seg := CylinderShape3D.new()
+		seg.radius = seg_radius
+		seg.height = seg_len
+		var seg_center := (seg_start + seg_end) * 0.5
+		var seg_dir := (seg_end - seg_start).normalized()
+		var seg_t := Transform3D.IDENTITY
+		seg_t.origin = seg_center
+		var look_target := seg_center + seg_dir
+		var up_hint := Vector3.UP
+		if abs(seg_dir.dot(Vector3.UP)) > 0.99:
+			up_hint = Vector3.RIGHT
+		seg_t.basis = Basis.looking_at(look_target - seg_center, up_hint)
+		collision_data.append({"shape": seg, "local_transform": seg_t})
+
+	var top_pos := Vector3(bend_x * 0.15, trunk_h, bend_z * 0.15)
+
+	var tiers: Array[Dictionary] = [
+		{"y": 4.0, "count": 2, "length": 5.0, "width": 2.0},
+		{"y": 8.0, "count": 2, "length": 4.5, "width": 2.0},
+	]
+	_build_tree_platforms(st, Vector3.ZERO, tiers, wood_col, leaf_col, rng[0], collision_data)
+
+	_add_leaf_cluster(st, top_pos, 2.5, 5, leaf_col)
+	_add_leaf_cluster(st, top_pos + Vector3(0.8, -0.5, 0.8), 1.8, 4, leaf_col)
 
 	var mesh := st.commit()
 	wood_mat.vertex_color_use_as_albedo = true
 	mesh.surface_set_material(0, wood_mat)
-	return mesh
+	return {"mesh": mesh, "collision": collision_data}
+
+func _make_tree_mesh_banyan(wood_mat: StandardMaterial3D, leaf_mat: StandardMaterial3D, seed_offset: int) -> Dictionary:
+	var st: SurfaceTool = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var collision_data: Array = []
+	var trunk_h := 8.0 + (seed_offset % 100) * 0.02
+	var trunk_r := 1.0 + (seed_offset % 50) * 0.004
+	var wood_col := wood_mat.albedo_color
+	var leaf_col := leaf_mat.albedo_color
+
+	_make_cylinder_segment(st, Vector3.ZERO, Vector3.UP * trunk_h, trunk_r, trunk_r * 0.8, 10, wood_col)
+
+	var root_cols := 4
+	for i in root_cols:
+		var angle := float(i) / root_cols * TAU
+		var root_pos := Vector3(cos(angle) * trunk_r * 2.5, 0, sin(angle) * trunk_r * 2.5)
+		var root_top := Vector3(cos(angle) * trunk_r * 1.5, trunk_h * 0.6, sin(angle) * trunk_r * 1.5)
+		_make_cylinder_segment(st, root_pos, root_top, 0.15, 0.1, 5, wood_col)
+		var root_len := root_pos.distance_to(root_top)
+		var root_seg := CylinderShape3D.new()
+		root_seg.radius = 0.12
+		root_seg.height = root_len
+		var root_center := (root_pos + root_top) * 0.5
+		var root_dir := (root_top - root_pos).normalized()
+		var root_t := Transform3D.IDENTITY
+		root_t.origin = root_center
+		var root_look := root_center + root_dir
+		var root_up := Vector3.UP
+		if abs(root_dir.dot(Vector3.UP)) > 0.99:
+			root_up = Vector3.RIGHT
+		root_t.basis = Basis.looking_at(root_look - root_center, root_up)
+		collision_data.append({"shape": root_seg, "local_transform": root_t})
+
+	var tiers: Array[Dictionary] = [
+		{"y": 3.0, "count": 3, "length": 8.0, "width": 3.0},
+		{"y": 6.0, "count": 3, "length": 7.0, "width": 2.8},
+	]
+	_build_tree_platforms(st, Vector3.ZERO, tiers, wood_col, leaf_col, seed_offset, collision_data)
+
+	_add_leaf_cluster(st, Vector3.UP * trunk_h, 5.0, 7, leaf_col)
+
+	var trunk := CylinderShape3D.new()
+	trunk.radius = trunk_r
+	trunk.height = trunk_h
+	collision_data.append({"shape": trunk, "local_transform": Transform3D.IDENTITY})
+
+	var mesh := st.commit()
+	wood_mat.vertex_color_use_as_albedo = true
+	mesh.surface_set_material(0, wood_mat)
+	return {"mesh": mesh, "collision": collision_data}
 
 func _scatter_trees() -> void:
 	var wood_oak: StandardMaterial3D = StandardMaterial3D.new()
@@ -414,50 +544,68 @@ func _scatter_trees() -> void:
 	leaf_swamp_mat.albedo_color = Color(0.08, 0.2, 0.06)
 	leaf_swamp_mat.roughness = 0.95
 
+	var wood_banyan: StandardMaterial3D = StandardMaterial3D.new()
+	wood_banyan.albedo_color = Color(0.3, 0.22, 0.1)
+	wood_banyan.roughness = 0.85
+	var leaf_banyan_mat: StandardMaterial3D = StandardMaterial3D.new()
+	leaf_banyan_mat.albedo_color = Color(0.1, 0.35, 0.08)
+	leaf_banyan_mat.roughness = 0.9
+
 	var seed_base := world_gen.seed_value
 
 	var oak_key := "oak_%d" % seed_base
-	var oak_mesh: ArrayMesh
+	var oak_data: Dictionary
 	if _tree_mesh_cache.has(oak_key):
-		oak_mesh = _tree_mesh_cache[oak_key]
+		oak_data = _tree_mesh_cache[oak_key]
 	else:
-		oak_mesh = _make_tree_mesh_oak(wood_oak, leaf_oak_mat, seed_base)
-		_tree_mesh_cache[oak_key] = oak_mesh
+		oak_data = _make_tree_mesh_oak(wood_oak, leaf_oak_mat, seed_base)
+		_tree_mesh_cache[oak_key] = oak_data
 
 	var pine_key := "pine_%d" % seed_base
-	var pine_mesh: ArrayMesh
+	var pine_data: Dictionary
 	if _tree_mesh_cache.has(pine_key):
-		pine_mesh = _tree_mesh_cache[pine_key]
+		pine_data = _tree_mesh_cache[pine_key]
 	else:
-		pine_mesh = _make_tree_mesh_pine(wood_pine, leaf_pine_mat)
-		_tree_mesh_cache[pine_key] = pine_mesh
+		pine_data = _make_tree_mesh_pine(wood_pine, leaf_pine_mat)
+		_tree_mesh_cache[pine_key] = pine_data
 
 	var swamp_key := "swamp_%d" % (seed_base + 2000)
-	var swamp_mesh: ArrayMesh
+	var swamp_data: Dictionary
 	if _tree_mesh_cache.has(swamp_key):
-		swamp_mesh = _tree_mesh_cache[swamp_key]
+		swamp_data = _tree_mesh_cache[swamp_key]
 	else:
-		swamp_mesh = _make_tree_mesh_swamp(wood_swamp, leaf_swamp_mat, seed_base + 2000)
-		_tree_mesh_cache[swamp_key] = swamp_mesh
+		swamp_data = _make_tree_mesh_swamp(wood_swamp, leaf_swamp_mat, seed_base + 2000)
+		_tree_mesh_cache[swamp_key] = swamp_data
+
+	var banyan_key := "banyan_%d" % (seed_base + 3000)
+	var banyan_data: Dictionary
+	if _tree_mesh_cache.has(banyan_key):
+		banyan_data = _tree_mesh_cache[banyan_key]
+	else:
+		banyan_data = _make_tree_mesh_banyan(wood_banyan, leaf_banyan_mat, seed_base + 3000)
+		_tree_mesh_cache[banyan_key] = banyan_data
 
 	var max_slope := 0.5
 	var half := HALF_WORLD - 2.0
-	var all_points := _poisson_disk_sample(half, 9.0, world_gen.seed_value + 999)
+	var all_points := _poisson_disk_sample(half, 22.0, world_gen.seed_value + 999)
 
 	var tree_rng := RandomNumberGenerator.new()
 	tree_rng.seed = world_gen.seed_value + 1000
 
-	var tree_buckets: Array[Array] = [[], [], []]
+	var tree_buckets: Array[Array] = [[], [], [], []]
 	var tree_biomes: Array[Array] = [
 		[world_gen.Biome.MEADOWS],
 		[world_gen.Biome.BLACK_FOREST, world_gen.Biome.MOUNTAIN],
 		[world_gen.Biome.SWAMP],
+		[world_gen.Biome.MEADOWS],
 	]
 	var tree_scales: Array[Vector2] = [
-		Vector2(3.0, 6.0),
-		Vector2(2.5, 5.5),
-		Vector2(2.5, 5.0),
+		Vector2(1.0, 1.8),
+		Vector2(0.8, 1.4),
+		Vector2(1.0, 1.6),
+		Vector2(1.0, 1.5),
 	]
+	var tree_spawn_chances: Array[float] = [0.35, 0.35, 0.35, 0.15]
 
 	for p in all_points:
 		var px := p.x
@@ -470,10 +618,10 @@ func _scatter_trees() -> void:
 		var biome := world_gen.get_biome(px, pz)
 		var forest := world_gen.get_forest(px, pz)
 
-		for ti in 3:
+		for ti in 4:
 			if biome in tree_biomes[ti]:
 				var threshold := 0.25 if biome == world_gen.Biome.SWAMP else 0.3
-				if forest > threshold and tree_rng.randf() < 0.35:
+				if forest > threshold and tree_rng.randf() < tree_spawn_chances[ti]:
 					var sh := world_gen.get_height(px, pz)
 					var t := Transform3D.IDENTITY
 					var s := tree_scales[ti].x + tree_rng.randf() * (tree_scales[ti].y - tree_scales[ti].x)
@@ -483,27 +631,18 @@ func _scatter_trees() -> void:
 					tree_buckets[ti].append(t)
 				break
 
-	var tree_meshes := [oak_mesh, pine_mesh, swamp_mesh]
-	for ti in 3:
+	var tree_datas := [oak_data, pine_data, swamp_data, banyan_data]
+	for ti in 4:
 		var positions := tree_buckets[ti]
 		if positions.size() == 0:
 			continue
-		var mm: MultiMesh = MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.mesh = tree_meshes[ti]
-		mm.instance_count = positions.size()
-		for i in positions.size():
-			mm.set_instance_transform(i, positions[i])
-			var tint := Color(1.0, tree_rng.randf_range(0.85, 1.0), tree_rng.randf_range(0.85, 1.0))
-			mm.set_instance_color(i, tint)
-		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.roughness = 0.9
-		material.vertex_color_use_as_albedo = true
-		mmi.material_override = material
-		add_child(mmi)
+		var data: Dictionary = tree_datas[ti]
+		var mesh: ArrayMesh = data["mesh"]
+		var collision: Array = data["collision"]
+		for pos in positions:
+			var tree := InteractableTree.new()
+			tree.setup(mesh, collision, pos, ti)
+			add_child(tree)
 
 func _make_grass_mesh() -> ArrayMesh:
 	# 3 intersecting blades with vertex color gradient (dark base -> light tip)
