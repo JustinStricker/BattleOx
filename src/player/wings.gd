@@ -32,10 +32,6 @@ var _launch_sweep: float = 0.0
 var _flight_alpha: float = 1.0
 
 var _jump_trail_particles: GPUParticles3D
-var _launch_shockwave: MeshInstance3D
-var _launch_shockwave_mat: StandardMaterial3D
-var _landing_shockwave: MeshInstance3D
-var _landing_shockwave_mat: StandardMaterial3D
 
 var _launch_pmat: ParticleProcessMaterial
 var _launch_pmesh: SphereMesh
@@ -44,8 +40,6 @@ var _launch_pm_mat: StandardMaterial3D
 
 func _ready() -> void:
 	_build_wings()
-	_build_launch_shockwave()
-	_build_landing_shockwave()
 	_build_jump_trail()
 	_cache_launch_burst()
 
@@ -225,67 +219,6 @@ func _setup_particles() -> void:
 			_right_particles = particles
 
 
-func _make_ring_mesh(inner_r: float, outer_r: float) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segments := 24
-	for i in segments:
-		var a0 := float(i) / segments * TAU
-		var a1 := float(i + 1) / segments * TAU
-		var c0 := cos(a0); var s0 := sin(a0)
-		var c1 := cos(a1); var s1 := sin(a1)
-
-		var i0 := Vector3(c0 * inner_r, 0, s0 * inner_r)
-		var i1 := Vector3(c1 * inner_r, 0, s1 * inner_r)
-		var o0 := Vector3(c0 * outer_r, 0, s0 * outer_r)
-		var o1 := Vector3(c1 * outer_r, 0, s1 * outer_r)
-
-		st.set_uv(Vector2(0, 0)); st.add_vertex(i0)
-		st.set_uv(Vector2(1, 0)); st.add_vertex(i1)
-		st.set_uv(Vector2(0, 1)); st.add_vertex(o0)
-
-		st.set_uv(Vector2(1, 0)); st.add_vertex(i1)
-		st.set_uv(Vector2(1, 1)); st.add_vertex(o1)
-		st.set_uv(Vector2(0, 1)); st.add_vertex(o0)
-	return st.commit()
-
-
-func _build_launch_shockwave() -> void:
-	_launch_shockwave_mat = StandardMaterial3D.new()
-	_launch_shockwave_mat.albedo_color = Color(0.4, 0.8, 1.0, 0.6)
-	_launch_shockwave_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_launch_shockwave_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_launch_shockwave_mat.emission_enabled = true
-	_launch_shockwave_mat.emission = Color(0.3, 0.6, 1.0)
-	_launch_shockwave_mat.emission_energy_multiplier = 8.0
-	_launch_shockwave_mat.no_depth_test = true
-
-	var ring_mesh := _make_ring_mesh(0.1, 0.3)
-
-	_launch_shockwave = MeshInstance3D.new()
-	_launch_shockwave.mesh = ring_mesh
-	_launch_shockwave.material_override = _launch_shockwave_mat
-	_launch_shockwave.visible = false
-
-
-func _build_landing_shockwave() -> void:
-	_landing_shockwave_mat = StandardMaterial3D.new()
-	_landing_shockwave_mat.albedo_color = Color(0.5, 0.85, 1.0, 0.5)
-	_landing_shockwave_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_landing_shockwave_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_landing_shockwave_mat.emission_enabled = true
-	_landing_shockwave_mat.emission = Color(0.3, 0.6, 1.0)
-	_landing_shockwave_mat.emission_energy_multiplier = 4.0
-	_landing_shockwave_mat.no_depth_test = true
-
-	var ring_mesh := _make_ring_mesh(0.05, 0.2)
-
-	_landing_shockwave = MeshInstance3D.new()
-	_landing_shockwave.mesh = ring_mesh
-	_landing_shockwave.material_override = _landing_shockwave_mat
-	_landing_shockwave.visible = false
-
-
 func _build_jump_trail() -> void:
 	var pmat := ParticleProcessMaterial.new()
 	pmat.direction = Vector3(0, -1, 0)
@@ -369,9 +302,6 @@ func launch(charge: float) -> void:
 	sweep_tween.set_ease(Tween.EASE_OUT)
 	sweep_tween.tween_property(self, "_launch_sweep", 0.0, 0.6)
 
-	# Shockwave
-	_show_shockwave(_launch_shockwave, _launch_shockwave_mat, 1.5 + burst_t * 2.0, 0.4)
-
 	# Start jump trail
 	_jump_trail_particles.emitting = true
 
@@ -381,33 +311,6 @@ func launch(charge: float) -> void:
 	fade_tween.set_trans(Tween.TRANS_SINE)
 	fade_tween.set_ease(Tween.EASE_OUT)
 	fade_tween.tween_property(self, "_flight_alpha", 0.25, 0.5)
-
-
-func _show_shockwave(wave: MeshInstance3D, mat: StandardMaterial3D, max_scale: float, duration: float) -> void:
-	if wave.is_inside_tree():
-		wave.queue_free()
-
-	var w := wave.duplicate()
-	var m := StandardMaterial3D.new()
-	m.albedo_color = mat.albedo_color
-	m.transparency = mat.transparency
-	m.cull_mode = mat.cull_mode
-	m.emission_enabled = mat.emission_enabled
-	m.emission = mat.emission
-	m.emission_energy_multiplier = mat.emission_energy_multiplier
-	m.no_depth_test = mat.no_depth_test
-	w.material_override = m
-	w.scale = Vector3(0.1, 0.1, 0.1)
-	w.visible = true
-	add_child(w)
-
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(w, "scale", Vector3(max_scale, max_scale, max_scale), duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
-	tween.tween_property(m, "albedo_color:a", 0.0, duration)
-	tween.tween_property(m, "emission_energy_multiplier", 0.0, duration)
-	tween.chain()
-	tween.tween_callback(w.queue_free)
 
 
 func land() -> void:
@@ -421,9 +324,6 @@ func land() -> void:
 	_target_scale = 1.15
 	var pulse_tween := create_tween()
 	pulse_tween.tween_property(self, "_target_scale", 0.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-
-	# Landing shockwave
-	_show_shockwave(_landing_shockwave, _landing_shockwave_mat, 2.0, 0.3)
 
 
 func _process(delta: float) -> void:
