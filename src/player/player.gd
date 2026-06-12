@@ -83,7 +83,7 @@ var _has_target: bool = false
 
 func _ready() -> void:
 	add_to_group("player")
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 4
 	_saved_mask = collision_mask
 
 	# Authority is set in the spawn function and cascades automatically to all children

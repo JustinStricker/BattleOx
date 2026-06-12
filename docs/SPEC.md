@@ -4,19 +4,29 @@
 
 Modes share core systems (shields, abilities, combat, tool system):
 
-- **Survival** — PvE. Day/night cycle, zombie waves, collectibles, safehouse crafting, ability progression.
+- **Survival** — PvE. Day/night cycle, zombie waves, collectibles, safehouse crafting, Echo Zones, boss fights, ability progression.
+- **Horde** — PvE. Fixed-position wave defense. Escalating difficulty. How long can you survive?
 - **King of the Hill** — PvP. 2–4 players compete for zone control.
+- **Arena** — PvP. FFA or team deathmatch. No objective — just kills.
 - **Battle Royale (TBD)** — PvP. Last-standing, storm circle, loot drops. Design phase.
 
 ---
 
-# Core Systems (Both Modes)
+# Design Philosophy
+
+## Combat Identity
+- **Skillshots over hitscan**: All ranged attacks are projectiles with travel time. No point-and-click. No hitscan. Every shot requires leading, prediction, or timing.
+- **Player agency preserved**: No hard CC in PvP (stuns, freezes, sleeps). All crowd control is soft — slow, knockback, displacement, vulnerability. You can always fight back.
+- **Weapons defined by mechanical role**: Each weapon fills a distinct combat function (sustained DPS, burst, AoE, multi-target, etc.). The weapon's identity is what it DOES, not what it looks like.
+
+---
+
+# Core Systems
 
 ## Shields
 
-Regenerative damage buffer above health.
+The player's only health pool. When shields hit 0, you die.
 - Base capacity: 150 shields. Regen delay: 3s. Regen rate: 25/s.
-- Damage hits shields first; overflow passes to health.
 - Screen flash + sound cue on shield break. Shield bar in HUD.
 
 ### Synergies
@@ -26,91 +36,81 @@ Regenerative damage buffer above health.
 | KOTH zone | delay reduced by 0.5s | KOTH |
 | Charge ability | restore 50 shields on impact | Both |
 | Shield Injector (crafted) | restore 50 shields instantly | Survival |
-| Volatile kills at night | restore 25 shields | Survival |
 | Every 10 Hill points | restore 25 shields | KOTH |
-| Nova | costs 50 shields (unavailable below 50, unless upgraded) | Both |
-
-### Enchantments (Tomes in Echo Zones)
-| Enchant | Effect |
-|---|---|
-| Shield Capacity I/II/III | +25/+50/+75 max shields |
-| Rapid Regen | +10/s regen rate |
-| Quick Restore | -1s regen delay |
-| Charge Buffer | Charge restores +25 more shields |
-| Volatile Leech | Volatile kills restore +25 more shields |
-| Hill Conduit | 2x regen rate in Hill zone |
-
-Enchantments are Survival-only. KOTH is a clean slate.
+| Nova | costs 50 shields (unavailable below 50) | Both |
 
 ---
 
 ## Abilities
 
-Replaces the earlier Biotics system. Broader ability framework drawing from Overwatch (cooldown loadout + ultimate), Mass Effect (primer/detonator combos), and RAGE (Overdrive).
+Broader ability framework drawing from Overwatch (cooldown loadout + ultimate) and RAGE (Overdrive).
 
 ### Loadout System
 
-Players build a custom ability loadout from a pool of abilities, assigned to hotkey slots:
+Players have 4 ability slots:
 
-| Slot | Binding | Type | Cooldown Range |
+| Slot | Binding | Type | Swappable |
 |---|---|---|---|
-| Ability 1 | Q (or Shift) | Movement / utility | 6–10s |
-| Ability 2 | E | Combat / control | 8–14s |
-| Overdrive | Shift (or side button) | Personal steroid | ~15s cooldown, ~6s duration |
-| Ultimate | F | High-impact heroic moment | Builds via combat damage |
+| Ability 1 | Q (or Shift) | Movement / utility | No — found in world, fixed once equipped |
+| Ability 2 | E | Combat / control | No — found in world, fixed once equipped |
+| Overdrive | Shift (or side button) | Personal steroid | No — always berserker mode |
+| Ultimate | F | High-impact heroic moment | Yes — swap at boss fights |
 
 - Overdrive is separate from Ultimate: a short-lived damage/speed/regen burst rather than a big projectile.
 - Ultimate charge builds at 2% per damage point dealt (keep existing system).
-- Abilities can be found as schematics in the world (RAGE-style discovery) rather than earned via XP.
-- **TBD**: Ability trees vs pick-from-global-pool vs hybrid.
+- Q and E abilities are found in the world. Once equipped, they're fixed.
+- Ultimates are earned by defeating Echo Zone bosses. After defeating a boss, you can swap your current Ultimate for the one the boss drops.
+- Overdrive is always the berserker steroid — not swappable.
 
-### Primer / Detonator Combos (Mass Effect)
+### Crowd Control Rules
 
-Some abilities apply a status effect (primer), others trigger it for bonus damage (detonator):
-
-| Primer | Applied By | Detonator Effect |
-|---|---|---|
-| Lifted | Pull, Singularity | Throw → bonus fall damage, AoE knockback |
-| Warped | Warp, certain weapon mods | Any damage → +50% vulnerability |
-| Frozen | Cryo weapon mod | Shatter → AoE burst, bonus damage |
-| Stunned | Charge, Overdrive melee | Any damage → +25% bonus |
-
-- Combo-aware loadout building is a skill layer.
-- Tooltips show which abilities combo with each other.
+- **All modes**: No hard CC anywhere. All crowd control is soft — target can always move and act, just at a disadvantage.
+- Allowed soft CC: slow, knockback, displacement, vulnerability, silence (ability cooldown increase), disarm (weapon cooldown increase).
+- Forbidden hard CC: stun, freeze, sleep, root, polymorph, banish.
 
 ### Overdrive (RAGE)
 
 Temporary combat steroid:
 - Activation: Manual when bar is full (builds through dealing/taking damage, kills)
 - Duration: ~6s
-- Effects: +30% damage, +20% move speed, health regen, empowered melee
+- Effects: +30% damage, +20% move speed, shield regen, empowered melee
 - Cooldown: ~15s after Overdrive ends (separate from ability cooldowns)
 - Feels like a berserker mode — short enough to require timing, frequent enough to use every encounter.
 
 ### Ultimate
 
-Keep the existing system: builds via combat damage (2% per damage point), press F to activate. The current Charge/Nova becomes one possible Ultimate. Future ultimates could include:
+Builds via combat damage (2% per damage point), press F to activate. Ultimates are earned by defeating Echo Zone bosses and can be swapped at boss fights.
+
+Starting Ultimate:
+- **Charge/Nova**: Gap closer + AoE damage
+
+Other Ultimates (earned from bosses):
 - **Overdrive Surge**: Enter a superior Overdrive state (doubled effects, longer duration)
 - **Orbital Strike**: Call down a targeted AoE barrage
 - **Absorption Field**: Create a zone that drains enemy shields and restores ally shields
-- **Mass Singularity**: Pull all enemies in a large radius to a single point, then detonate
 
-### Known Biotics Legacy
+### Ability Pool
 
-The existing 8 biotics (Pull, Throw, Warp, Singularity, Charge, Nova, Bend Time, Dark Vision) are candidates for rework into the ability pool and upgrade tree system. Charge and Nova are partially implemented. Their status:
+The existing 8 biotics are reworked into the ability pool. Charge and Nova are partially implemented. Their status:
 
-| Power | Fate |
-|---|---|
-| Charge, Nova | Re-evaluate as Ultimate candidates or individual abilities |
-| Pull, Throw | Keep as primer/detonator pair |
-| Warp | Keep as vulnerability primer |
-| Singularity, Bend Time, Dark Vision | Deferred — revisit after ability system redesign
+| Power | Slot | Fate |
+|---|---|---|
+| Charge | Ultimate (starting) | Gap closer + AoE damage. Starting ultimate. |
+| Nova | Ultimate (starting) | Part of starting Charge/Nova ultimate. |
+| Pull | Q | Pulls target toward you (forced movement). Target can still attack. |
+| Throw | E | Launches enemy. Knockback, not hard CC. |
+| Warp | E | Applies vulnerability. No CC. |
+| Singularity | Q | AoE pull toward center (soft CC, not lift). |
+| Bend Time | Q | Slow enemies in area by X%. No time freeze. |
+| Dark Vision | E | Reveal enemies through walls. Intel, no CC. |
 
 ---
 
 ## Combat
 
-### Weapon Design (RAGE-Inspired)
+### Weapon Design (Projectile-Only, RAGE-Inspired)
+
+All weapons are projectiles. No hitscan. No point-and-click. Every weapon requires leading, prediction, or timing.
 
 Each weapon is a unique tool (not a stat tier). Weapons are found as schematics in the world and require specific materials to craft/upgrade.
 
@@ -119,15 +119,18 @@ Every weapon has:
 - **Alternate fire** — a distinct secondary mode (not just zoom)
 - **Rarity** (TBD) — Common / Uncommon / Rare / Legendary variants with passive modifiers
 
-| Weapon | Primary | Alt-Fire | Inspiration |
+### Weapon Roles
+
+Weapons are defined by mechanical function, not by name. Each fills a distinct combat role:
+
+| Mechanical Role | Skill Expression | Weapon Candidates | Status |
 |---|---|---|---|
-| Wingstick (TBD) | Thrown, bounces between targets | Remote detonate | RAGE |
-| Bow (existing) | Charge shot | (keep existing) | Existing |
-| Sword (existing) | Dash-slash combo | (keep existing) | Existing |
-| Assault Rifle (TBD) | Full-auto | Armor-piercing rounds | RAGE / Mass Effect |
-| Shotgun (TBD) | Spread | Slug / focused | RAGE |
-| Sniper (TBD) | Precision shot | Thermal / penetrator | RAGE |
-| Rocket Launcher (TBD) | Explosive | Manual detonate | Mass Effect |
+| **Sustained ranged DPS** | Leading, charge timing, movement | Bow | ✅ Implemented |
+| **Melee burst + gap closer** | Timing the dash, positioning | Sword | ✅ Implemented |
+| **Multi-target / ricochet** | Ricochet angles, target prioritization | Wingstick | Planned |
+| **AoE / area denial** | Arc timing, positioning | Grenades, traps | TBD |
+| **Burst ranged DPS** | Prediction, patience | Heavy throw, javelin, crossbow | TBD |
+| **Defensive / utility** | Reaction timing, positioning | Parry, block, dodge | TBD |
 
 ### Bow
 | Property | Value |
@@ -146,6 +149,13 @@ Every weapon has:
 | Cone | 75° half-angle, 8m range |
 | Dash | 60 m/s for 0.25s |
 
+### Wingstick (Planned)
+| Property | Value |
+|---|---|
+| Primary | Thrown projectile, bounces between targets |
+| Alt-Fire | Remote detonate |
+| Inspiration | RAGE |
+
 ### Overdrive (RAGE)
 | Property | Value |
 |---|---|
@@ -153,12 +163,12 @@ Every weapon has:
 | Duration | ~6s |
 | Damage bonus | +30% |
 | Speed bonus | +20% |
-| Regen | Health regen during Overdrive |
+| Regen | Shield regen during Overdrive |
 | Cooldown | ~15s (starts after duration ends) |
-| Effects | Empowered melee, screen FX, sound cue |
-| Note | Separate from Ultimate — shorter, more frequent |
+| Effects | Empowered melee (knockback on hit), screen FX, sound cue |
+| Note | Separate from Ultimate — shorter, more frequent. Melee applies knockback, not stun. |
 
-### Multiplayer (Both Modes)
+### Multiplayer
 Host is authoritative. Clients send inputs; host validates cooldowns, runs hit checks, broadcasts results. Arrows spawned by host only.
 
 ---
@@ -181,10 +191,11 @@ Universal item framework. Every equippable item is a **Tool** instance rather th
 
 ### Planned Tools
 - Wingstick
-- Assault Rifle, Shotgun, Sniper, Rocket Launcher
-- Consumables (bandage, shield injector, etc.)
+- Grenades / traps (AoE projectile tools)
+- Consumables (shield injector, etc.)
 - Building hammer / blueprint tool
 - Grappling hook (potential)
+- Additional projectile weapons (TBD — defined by mechanical role, not gun type)
 
 ### Multiplayer
 Tool state (equipped slot, ammo, cooldown) synced via RPC. Host validates tool actions.
@@ -207,12 +218,13 @@ Building is under consideration. Two possible directions:
 # Survival Mode (PvE)
 
 ## Core Loop
-Explore procedurally-generated terrain → fight zombie waves → complete Hill hold → survive night → craft upgrades → discover new abilities and schematics → repeat with escalating difficulty.
+Explore procedurally-generated terrain → fight night waves → survive → craft upgrades → discover Echo Zones → defeat bosses → unlock new Ultimates → repeat.
 
 ## Day/Night Cycle
 - Full cycle: 12 min (8 day, 4 night). Transitions: 30s each.
 - Visual: sun position drives sky colors, light, fog. Moon + stars at night.
-- Night: zombies +30% speed, 2x aggro, 3x spawn rate. Volatiles spawn.
+- Day: Shamblers only (rare, passive unless provoked). Safe exploration time.
+- Night: All types spawn (Shambler, Runner, Brute). Aggressive. 3x spawn rate. +30% speed, 2x aggro.
 - UI: sun/moon icon, dusk/dawn warning flash.
 
 ## Enemies (Zombies)
@@ -243,25 +255,20 @@ Single room, 10×6×4m grid (1m³ cells). Blocks snap to grid.
 |---|---|
 | Crafting Table | 3×3 recipe grid |
 | Storage Chest | 64 inventory slots |
-| Upgrade Altar | Spend Echo Shards on biotic upgrades |
 | Bed | Set spawn, skip night |
 | Furnace | Smelt ore |
-| Enchanting Table | Apply enchantments (first found in Echo Zone) |
 | Brewing Stand | Brew potions |
 | Garden | Grow food |
 
 ### Resources
-Wood, Stone, Cloth, Scrap Metal, Echo Shards, Gunpowder, Mushrooms, Diamond, Alcohol
+Wood, Stone, Scrap Metal, Gunpowder, Mushrooms, Alcohol
 
 ### Consumables
 | Item | Recipe | Effect |
 |---|---|---|
-| Bandage | 2 Cloth | Heal 25 HP |
-| Medkit | 3 Cloth + 1 Alcohol | Heal 75 HP |
-| Shield Injector | 2 Scrap Metal + 1 Echo Shard | Restore 50 shields |
-| Shield Capacitor | 3 Scrap Metal + 2 Echo Shards | +25 max shields next hold |
-| Biotic Surge | 1 Echo Shard + 1 Mushroom | -50% cooldowns 10s |
-| Nightshade Potion | 1 Echo Shard + 1 Alcohol | Invisibility 10s |
+| Shield Injector | 2 Scrap Metal | Restore 50 shields |
+| Biotic Surge | 1 Mushroom + 1 Gunpowder | -50% cooldowns 10s |
+| Nightshade Potion | 1 Alcohol + 1 Mushroom | Invisibility 10s |
 
 ### Blocks
 | Item | Recipe | Notes |
@@ -275,19 +282,109 @@ Wood, Stone, Cloth, Scrap Metal, Echo Shards, Gunpowder, Mushrooms, Diamond, Alc
 ### Recipe Unlocks
 | Recipe | Trigger |
 |---|---|
-| Bandage, Medkit, Shield Injector, Wood, Stone, Torch, Ladder | Default |
+| Shield Injector, Wood, Stone, Torch, Ladder | Default |
 | TNT | Find Gunpowder |
 | Furnace | Find 8 Stone |
-| Bed | Find 3 Wood + 2 Cloth |
-| Shield Capacitor | Unlock Charge |
-| Biotic Surge | Find Echo Shard + Mushroom |
-| Nightshade Potion | Complete a no-damage hold |
-| Enchanting Table | Find one in Echo Zone |
-| Brewing Stand | Kill Volatile with a biotic power |
+| Bed | Find 3 Wood + 2 Scrap Metal |
+| Biotic Surge | Find Mushroom + Gunpowder |
+| Nightshade Potion | Find Alcohol + Mushroom |
+| Brewing Stand | Find Alcohol |
 | Garden | Find Water Bucket |
 
 ### Multiplayer
 Safehouse, inventory, and upgrades are per-player. Crafting UI is local-only.
+
+---
+
+# Horde Mode (PvE)
+
+## Core Loop
+Defend a fixed position against escalating waves of enemies. Survive as long as you can. How many waves can you hold?
+
+## Match Flow
+1. Players spawn at a fixed position on a map (could be a Survival biome or a purpose-built arena).
+2. Wave countdown begins (5s).
+3. Enemies spawn in increasing numbers and difficulty.
+4. Between waves: brief respite to reposition, use consumables, or upgrade.
+5. On death: instant respawn at defend point. Match ends when all players are dead simultaneously or all enemies are defeated.
+
+## Waves
+| Wave | Enemies | Modifier |
+|---|---|---|
+| 1–5 | Shambler-heavy, low count | Baseline |
+| 6–10 | Mix of Shambler/Runner, moderate count | Runner speed +10% |
+| 11–15 | Brutes appear, mixed waves | Shambler health +25% |
+| 16–20 | Full mix, high count | All enemies +15% damage |
+| 21+ | Escalating. Every 5 waves: elite modifier | Random modifier per 5 waves |
+
+### Elite Modifiers (every 5 waves)
+- **Swift**: All enemies +30% speed
+- **Armored**: All enemies +50% health
+- **Swarm**: 2x enemy count, -30% health each
+- **Brutal**: All enemies +25% health and damage
+
+## Scoring
+- Wave reached: wave number × 10 points
+- Enemies killed: 1 point each
+- No-damage waves: bonus 50 points
+
+## Multiplayer
+- Co-op (2–4 players). Shared position defense.
+- AI runs on host. Same as Survival.
+
+## What's NOT in Horde
+- Exploration or procedural terrain (fixed arena)
+- Safehouse or crafting (no time for it between waves)
+- Day/night cycle (waves ARE the pacing)
+- Progression or unlocks (clean slate per match)
+- Collectibles
+
+---
+
+## Echo Zones (in Survival)
+
+Echo Zones are mysterious ruins scattered across the Survival world. Enter, fight through rooms of enemies, defeat the boss, earn a new Ultimate.
+
+### Flow
+1. Discover an Echo Zone in the world.
+2. Enter the zone. Procedurally generated interior (rooms, corridors, arenas).
+3. Clear rooms of enemies to progress deeper.
+4. Reach the boss room. Defeat the boss.
+5. Boss drops a new Ultimate. Swap it into your loadout immediately.
+
+### Echo Zone Tiers
+| Tier | Enemies | Boss | Unlock |
+|---|---|---|---|
+| **Echo I** | Shambler/Runner mix, low density | Guardian (single elite enemy) | Default |
+| **Echo II** | Mixed + Brutes, medium density | Warden (elite + minions) | Clear 1 Echo I |
+| **Echo III** | Full mix, high density, elite modifiers | Herald (multi-phase boss) | Clear 1 Echo II |
+
+### Boss Design (Examples)
+
+#### Guardian (Echo I Boss)
+- Large Shambler variant. High health, slow, telegraphed melee attacks.
+- Summons 2–3 Shamblers periodically.
+- Tests: sustained DPS, dodging, crowd control on adds.
+
+#### Warden (Echo II Boss)
+- Armored biped. Shielded (must break shield before health).
+- Spawns Runner adds. Charges at players.
+- Tests: burst damage, target prioritization.
+
+#### Herald (Echo III Boss)
+- Floating entity. Ranged projectiles + AoE attacks.
+- Phases: shielded → exposed → enraged.
+- Tests: everything — positioning, Overdrive timing, Ultimate usage.
+
+### Echo Zone Rules
+- One-time clears. Zone marked complete on map after boss kill.
+- No loot loss on death. Respawn at zone entrance. Can retry boss.
+- Boss reward (Ultimate) is guaranteed — not random.
+- Materials and consumables found in the zone are kept regardless of death.
+- Interior is always dark (no day/night cycle inside).
+
+### Multiplayer
+- Co-op (2–4 players). Shared boss reward.
 
 ---
 
@@ -306,7 +403,7 @@ Safehouse, inventory, and upgrades are per-player. Crafting UI is local-only.
 ## Match Flow
 1. Players load on the same flat arena map (not procedural terrain).
 2. Zone activates after 5s countdown.
-3. On death: respawn at edge of arena after 3s.
+3. On death: instant respawn at edge of arena.
 4. Match ends when a player reaches 100 points.
 
 ## Matchmaking (Quick-Play)
@@ -353,21 +450,58 @@ Host calls `EOS_Stats_IngestStat` for all players:
 ## Shield Synergy
 - Standing in zone: -0.5s regen delay.
 - Every 10 points earned: +25 shields (one-time per threshold).
-- Hill Conduit enchantment works here (2x regen rate in zone).
 
 ## Ability Multiplayer Notes
-- Primer/detonator combos work on other players (same as enemies).
 - Overdrive is personal (no effect on others).
 - Ultimate abilities affect all players in range.
-- Specific ability effects (lift, stun, slow) apply to other players.
+- Ability effects (displacement, slow, vulnerability) apply to other players.
+- No hard CC on players — all crowd control is soft (slow, knockback, displacement, vulnerability).
 
 ## What's NOT in KOTH
-- Zombies, Volatiles
+- Zombies
 - Day/night cycle (always day)
 - Collectibles
 - Safehouse or crafting
 - Progression or unlocks — clean slate (all abilities available via loot, no carry-over from Survival)
-- Enchantments
+
+---
+
+# Arena Mode (PvP)
+
+## Core Loop
+FFA or team deathmatch. No objective. Just kills. Respawn on death.
+
+## Scoring
+- **FFA**: First to 30 kills wins. Timed variant (10 min, most kills wins).
+- **Teams**: First team to 50 kills wins. 2v2 or 4v4.
+
+## Match Flow
+1. Players load on a map (same arenas as KOTH, or new deathmatch-specific maps).
+2. Combat begins immediately. No countdown.
+3. On death: instant respawn at random point.
+4. Match ends when kill target is reached or time expires.
+
+## Matchmaking
+- Shares the same quick-play system as KOTH.
+- "Find Match" button → searches for KOTH or Arena lobbies.
+- Player can select preferred mode or "any."
+
+## Loadouts
+- Same ability loadout system as KOTH.
+- Players spawn with their chosen loadout.
+- Weapon pickups spawn on the map (Wingstick, grenades, etc.) — limited ammo, respawns after 30s.
+
+## Maps
+- Can reuse KOTH arenas (flat or terrain-based).
+- Larger maps for 4v4 teams.
+- No zone, no objective markers — pure combat space.
+
+## What's NOT in Arena
+- Zone, scoring zones, or objectives
+- Zombies or PvE enemies
+- Day/night cycle
+- Safehouse, crafting, or progression
+- Collectibles
 
 ---
 
@@ -398,7 +532,7 @@ PvP last-standing mode. Design phase — not yet implemented.
 ### Loot
 - Uncommon/rare weapons from floor loot and chests
 - Abilities found as single-use pickups (activate once, replaced by next pickup) or permanent until death
-- Consumables: shield injectors, bandages, medkits
+- Consumables: shield injectors
 - Ammo: found per weapon type
 
 ### Differences from Survival / KOTH
@@ -417,21 +551,52 @@ Planned social features, all TBD:
 - **Ping system**: Contextual radial menu — mark enemy, location, warning, request (Overwatch-inspired)
 - **Scoreboard**: Tab key — kills, damage dealt, damage taken, healing, objective time (Overwatch-inspired)
 - **Party system**: Invite friends before match, squad up, ready-up (Fortnite-inspired)
-- **Player customization**: Avatar skins, accessories, emotes (Roblox-inspired). Earned via achievements or found in-world.
+- **Player customization**: Avatar skins, accessories, emotes. Purchased (monetization).
 
 ---
 
 # Progression (Survival Only)
 
-Progression is discovery-driven, not XP-driven. No skill trees, no XP levels, no biome gates.
+Progression is discovery-driven, not XP-driven. No skill trees, no XP levels, no grind.
 
-- **Ability schematics**: Found in the world (Echo Zones, boss drops, hidden caches). Found = unlocked permanently.
-- **Weapon schematics**: Found in the world. Craft weapons at the crafting table from materials.
-- **Echo Shards**: Single currency. Spent on upgrades at the Upgrade Altar.
-- **Enchantments**: Found as Tomes in Echo Zones. Passive shield modifiers.
-- **Building blocks**: Harvest materials, craft blocks. Base data stored in EOS blob.
+## Ability Progression
 
-Progression does not cross modes — KOTH and Battle Royale are clean slates (all abilities/weapons found as in-match loot).
+### Q and E Abilities (4 total, found in world)
+| Ability | Slot | How Found |
+|---|---|---|
+| Pull | Q | World exploration |
+| Singularity | Q | World exploration |
+| Bend Time | Q | World exploration |
+| Throw | E | World exploration |
+| Warp | E | World exploration |
+| Dark Vision | E | World exploration |
+
+- Found = unlocked permanently.
+- Once equipped, fixed. Cannot be changed.
+
+### Ultimates (4 total, earned from bosses)
+| Ultimate | Boss |
+|---|---|
+| Charge/Nova | Starting ultimate |
+| Overdrive Surge | Echo I boss (Guardian) |
+| Orbital Strike | Echo II boss (Warden) |
+| Absorption Field | Echo III boss (Herald) |
+
+- Earned by defeating Echo Zone bosses.
+- Can be swapped at boss fights only.
+
+## Weapon Progression
+- **Bow**: Found in world. Craft at crafting table from materials.
+- **Sword**: Found in world. Craft at crafting table from materials.
+- **Wingstick**: Found in world. Craft at crafting table from materials.
+
+## Building
+- Harvest materials, craft blocks. Base data stored in EOS blob.
+
+## Cosmetic Progression
+- Base skins, character clothes, emotes — purchased, not crafted.
+
+Progression does not cross modes — KOTH, Arena, Horde, and Battle Royale are clean slates (all abilities/weapons found as in-match loot).
 
 ---
 
@@ -440,7 +605,7 @@ Progression does not cross modes — KOTH and Battle Royale are clean slates (al
 ## Survival (PvE)
 | Data | Store | Authority | Notes |
 |---|---|---|---|
-| Schematics, enchantments, materials, base blocks, Echo Shards | EOS Player Data Storage | Player-authoritative | Single JSON blob. See TECH.md for schema. PvE — tampering doesn't matter. |
+| Abilities, weapon schematics, materials, base blocks, echo_zones_cleared, bosses_killed | EOS Player Data Storage | Player-authoritative | Single JSON blob. PvE — tampering doesn't matter. |
 | World state | Host memory | Host | Generated from seed, discarded |
 
 Save triggers: bed sleep, manual save, on quit, periodic autosave (60s).
@@ -451,6 +616,18 @@ Save triggers: bed sleep, manual save, on quit, periodic autosave (60s).
 | Match state (positions, scores, health) | Host memory | Host | Ephemeral — discarded on match end |
 | Wins, losses, matches played | EOS Stats | Host writes (IngestStat) | Used for MMR + leaderboards |
 
+## Horde (PvE)
+| Data | Store | Authority | Notes |
+|---|---|---|---|
+| Match state (wave, enemies, player positions) | Host memory | Host | Ephemeral — discarded on match end |
+| Score (waves, kills) | EOS Stats | Host writes (IngestStat) | Used for leaderboards |
+
+## Arena (PvP)
+| Data | Store | Authority | Notes |
+|---|---|---|---|
+| Match state (positions, kills, health) | Host memory | Host | Ephemeral — discarded on match end |
+| Wins, kills, matches played | EOS Stats | Host writes (IngestStat) | Used for MMR + leaderboards |
+
 ## Battle Royale (TBD)
 | Data | Store | Authority | Notes |
 |---|---|---|---|
@@ -459,10 +636,10 @@ Save triggers: bed sleep, manual save, on quit, periodic autosave (60s).
 
 ## EOS Service Map
 | Service | BattleOx Use |
-|---|---|---|
+|---|---|
 | Connect | Player authentication (Device ID dev, Epic Account prod) |
-| Lobbies | KOTH + Battle Royale match discovery + lifecycle |
+| Lobbies | KOTH + Arena + Battle Royale match discovery + lifecycle |
 | P2P | In-game multiplayer transport |
-| Stats | KOTH + Battle Royale win/loss/kill tracking |
-| Leaderboards | KOTH + Battle Royale ranking display |
+| Stats | KOTH + Arena + Battle Royale win/loss/kill tracking |
+| Leaderboards | KOTH + Arena + Battle Royale ranking display |
 | Player Data Storage | Survival save/load |

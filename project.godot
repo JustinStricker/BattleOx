@@ -84,6 +84,10 @@ ui_join={
 [physics]
 
 3d/physics_engine="Jolt Physics"
+layer_names/3d_physics_layer_1="Terrain"
+layer_names/3d_physics_layer_2="Characters"
+layer_names/3d_physics_layer_3=""
+layer_names/3d_physics_layer_4="Interactable"
 
 [rendering]
 
