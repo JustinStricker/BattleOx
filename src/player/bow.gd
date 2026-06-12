@@ -5,6 +5,7 @@ signal arrow_fired(origin: Vector3, direction: Vector3, speed: float)
 var is_charging: bool = false
 var charge_start_time: float = 0.0
 var shoot_cooldown: float = 0.0
+var _pending_charge: bool = false
 
 # String segments (connect tip → nock → tip)
 var _string_upper: MeshInstance3D
@@ -331,6 +332,10 @@ func _setup_muzzle_particles() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if not is_multiplayer_authority():
+		return
+	if not visible:
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.is_pressed():
 			start_charge()
@@ -339,8 +344,12 @@ func _input(event: InputEvent) -> void:
 
 
 func start_charge() -> void:
-	if is_charging or shoot_cooldown > 0:
+	if is_charging:
 		return
+	if shoot_cooldown > 0:
+		_pending_charge = true
+		return
+	_pending_charge = false
 	is_charging = true
 	charge_start_time = Time.get_ticks_msec()
 	_charge_orb.visible = true
@@ -348,6 +357,7 @@ func start_charge() -> void:
 
 
 func cancel_charge() -> void:
+	_pending_charge = false
 	if not is_charging:
 		return
 	is_charging = false
@@ -417,6 +427,9 @@ func _reset_glow() -> void:
 
 func _process(delta: float) -> void:
 	shoot_cooldown = max(shoot_cooldown - delta, 0.0)
+
+	if _pending_charge and shoot_cooldown <= 0 and not is_charging:
+		start_charge()
 
 	# Idle sway — subtle breathing motion
 	var idle_sway: float = sin(Time.get_ticks_msec() * 0.002) * 0.0015
