@@ -5,10 +5,18 @@ signal jump_launched(charge: float)
 signal jump_landed()
 signal roll_charges_changed(charges: int, recharging: bool, progress: float)
 signal health_changed(current: int, max_hp: int)
+signal shield_changed(current: int, max_shield: int)
 
 @onready var camera_node: Camera3D = $Camera3D
 var health: int = 100
 var max_health: int = 100
+var shield: int = 150
+var max_shield: int = 150
+const SHIELD_REGEN_DELAY: float = 3.0
+const SHIELD_REGEN_RATE: float = 25.0
+var shield_regen_timer: float = 0.0
+var _shield_regen_accumulator: float = 0.0
+var _shield_was_full: bool = true
 var invincible_timer: float = 0.0
 var _spawn_position: Vector3
 const SPEED: float = 5.0
@@ -244,20 +252,40 @@ func _input(event: InputEvent) -> void:
 func take_damage(amount: int) -> void:
 	if invincible_timer > 0.0:
 		return
-	health -= amount
-	health_changed.emit(health, max_health)
+
+	var remaining: int = amount
+
+	# Shields absorb first
+	if shield > 0:
+		var absorbed: int = mini(shield, remaining)
+		shield -= absorbed
+		remaining -= absorbed
+		shield_changed.emit(shield, max_shield)
+		shield_regen_timer = SHIELD_REGEN_DELAY
+		AudioManager.play_shield_hit()
+		if shield <= 0 and _shield_was_full:
+			EventBus.shield_break.emit()
+			AudioManager.play_shield_break()
+		_shield_was_full = shield > 0
+
+	# Overflow to health
+	if remaining > 0:
+		health -= remaining
+		health_changed.emit(health, max_health)
+
 	invincible_timer = 0.5
-	if is_multiplayer_authority():
-		AudioManager.play_player_hit()
-	elif multiplayer.multiplayer_peer != null:
+
+	if not is_multiplayer_authority() and multiplayer.multiplayer_peer != null:
 		rpc_id(get_multiplayer_authority(), "_sync_health", health)
+		rpc_id(get_multiplayer_authority(), "_sync_shield", shield)
+
 	if health <= 0:
 		if multiplayer.multiplayer_peer == null:
 			_die()
-			_respawn_after_delay()
+			_respawn()
 		elif multiplayer.is_server():
 			rpc("_die")
-			_respawn_after_delay()
+			_respawn()
 		else:
 			rpc_id(NetworkManager.SERVER_ID, "request_die")
 
@@ -296,19 +324,35 @@ func _sync_health(hp: int) -> void:
 	health_changed.emit(health, max_health)
 
 
+@rpc("any_peer", "call_remote", "reliable")
+func _sync_shield(sh: int) -> void:
+	if multiplayer.get_remote_sender_id() != NetworkManager.SERVER_ID:
+		return
+	shield = sh
+	shield_changed.emit(shield, max_shield)
+
+
 @rpc("authority", "call_remote", "reliable")
 func _respawn_client(pos: Vector3) -> void:
 	global_position = pos
 	health = max_health
+	shield = max_shield
 	health_changed.emit(health, max_health)
+	shield_changed.emit(shield, max_shield)
 	invincible_timer = 2.0
+	shield_regen_timer = 0.0
+	_shield_was_full = true
 	velocity = Vector3.ZERO
 
 
 func _respawn() -> void:
 	health = max_health
+	shield = max_shield
 	health_changed.emit(health, max_health)
+	shield_changed.emit(shield, max_shield)
 	invincible_timer = 2.0
+	shield_regen_timer = 0.0
+	_shield_was_full = true
 	if _spawn_position != Vector3():
 		global_position = _spawn_position
 	velocity = Vector3.ZERO
@@ -424,6 +468,22 @@ func _physics_process(delta: float) -> void:
 	# Shared timers for the locally-controlled copy.
 	invincible_timer = max(invincible_timer - delta, 0.0)
 	dash_cooldown = max(dash_cooldown - delta, 0.0)
+
+	# Shield regen
+	if shield < max_shield:
+		shield_regen_timer = max(shield_regen_timer - delta, 0.0)
+		if shield_regen_timer <= 0.0:
+			_shield_regen_accumulator += SHIELD_REGEN_RATE * delta
+			if _shield_regen_accumulator >= 1.0:
+				var regen_amount := int(_shield_regen_accumulator)
+				_shield_regen_accumulator -= regen_amount
+				var old_shield := shield
+				shield = mini(shield + regen_amount, max_shield)
+				if shield != old_shield:
+					shield_changed.emit(shield, max_shield)
+	elif not _shield_was_full:
+		_shield_was_full = true
+		_shield_regen_accumulator = 0.0
 
 	if roll_charges < MAX_ROLL_CHARGES:
 		roll_charge_recharge_timer += delta

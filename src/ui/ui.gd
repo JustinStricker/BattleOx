@@ -6,6 +6,7 @@ extends CanvasLayer
 @onready var bow_ability: Control = $AbilityBar/BowAbility
 @onready var roll_ability: Control = $AbilityBar/RollAbility
 @onready var ultimate_ability: Control = $AbilityBar/UltimateAbility
+@onready var shield_bar: Control = $ShieldBar
 
 var player: CharacterBody3D
 var sword: Node3D
@@ -15,6 +16,9 @@ var ultimate: Node3D
 var roll_display_charges: int = 3
 var roll_display_recharging: bool = false
 var roll_display_progress: float = 0.0
+
+var _display_shield: int = 150
+var _display_max_shield: int = 150
 
 var _needs_ability_redraw: bool = true
 
@@ -61,6 +65,12 @@ func _ready() -> void:
 					break
 
 		player.roll_charges_changed.connect(_on_roll_charges_changed)
+
+		if player.has_signal("shield_changed"):
+			player.shield_changed.connect(_on_shield_changed)
+			_display_shield = player.shield
+			_display_max_shield = player.max_shield
+			shield_bar.draw.connect(_draw_shield_bar)
 
 
 func _unhandled_input(_event: InputEvent) -> void:
@@ -380,3 +390,23 @@ func set_score(value: int) -> void:
 	var tween: Tween = create_tween()
 	tween.tween_property(score_label, "modulate", Color.YELLOW, 0.1).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(score_label, "modulate", Color.WHITE, 0.2)
+
+
+func _on_shield_changed(current: int, max_shield_val: int) -> void:
+	_display_shield = current
+	_display_max_shield = max_shield_val
+	shield_bar.queue_redraw()
+
+
+func _draw_shield_bar() -> void:
+	var size := shield_bar.get_rect().size
+	var bg := Color(0.1, 0.2, 0.35, 0.6)
+	var fill := Color(0.2, 0.55, 0.9, 0.85)
+	var ratio := float(_display_shield) / float(_display_max_shield) if _display_max_shield > 0 else 0.0
+	shield_bar.draw_rect(Rect2(0, 0, size.x, size.y), bg)
+	if ratio > 0.0:
+		shield_bar.draw_rect(Rect2(0, 0, size.x * ratio, size.y), fill)
+	shield_bar.draw_rect(Rect2(0, 0, size.x, 1.0), Color(0.4, 0.7, 1.0, 0.35))
+	shield_bar.draw_rect(Rect2(0, size.y - 1.0, size.x, 1.0), Color(0.4, 0.7, 1.0, 0.35))
+	shield_bar.draw_rect(Rect2(0, 0, 1.0, size.y), Color(0.4, 0.7, 1.0, 0.35))
+	shield_bar.draw_rect(Rect2(size.x - 1.0, 0, 1.0, size.y), Color(0.4, 0.7, 1.0, 0.35))

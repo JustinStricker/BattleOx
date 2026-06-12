@@ -71,6 +71,8 @@ func _generate_all_sounds() -> void:
 	_sounds["beam_tick"] = SoundGenerator.sine_wave(900.0, 0.02, -14.0)
 	_sounds["ui_confirm"] = SoundGenerator.arpeggio([880.0, 1100.0], 0.03, SoundGenerator.Waveform.SINE, -10.0)
 	_sounds["ui_cancel"] = SoundGenerator.arpeggio([440.0, 330.0], 0.04, SoundGenerator.Waveform.SINE, -10.0)
+	_sounds["shield_hit"] = SoundGenerator.layered_sine([800.0, 1200.0], 0.08, -6.0)
+	_sounds["shield_break"] = SoundGenerator.frequency_sweep(1200.0, 200.0, 0.25, SoundGenerator.Waveform.SINE, -3.0)
 
 
 func _play(sound_id: String, pitch_scale: float = 1.0, vol_offset_db: float = 0.0) -> void:
@@ -155,6 +157,14 @@ func play_player_hit() -> void:
 
 func play_player_death() -> void:
 	_play("player_death", 1.0, -2.0)
+
+
+func play_shield_hit() -> void:
+	_play("shield_hit", 1.0, -2.0)
+
+
+func play_shield_break() -> void:
+	_play("shield_break", 1.0, 0.0)
 
 
 func play_jump(charge: float) -> void:
