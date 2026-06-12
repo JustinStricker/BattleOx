@@ -1,15 +1,52 @@
 extends Node
 
-var _pool: Array[AudioStreamPlayer] = []
+var _sfx_player: AudioStreamPlayer
+var _sfx_playback: AudioStreamPlaybackPolyphonic
 var _sounds: Dictionary = {}
 
-var _bow_draw_player: AudioStreamPlayer = null
-
+var _bow_draw_stream_idx: int = -1
 const BOW_DRAW_BASE_FREQ := 150.0
+
+var _last_play_times: Dictionary = {}
+const DEFAULT_COOLDOWN := 0.05
+const RAPID_FIRE_COOLDOWN := 0.1
+var _cooldowns: Dictionary = {
+	"beam_tick": RAPID_FIRE_COOLDOWN,
+	"enemy_hit": RAPID_FIRE_COOLDOWN,
+	"enemy_attack": RAPID_FIRE_COOLDOWN,
+}
 
 
 func _ready() -> void:
+	_setup_buses()
 	_generate_all_sounds()
+	_setup_sfx_player()
+
+
+func _exit_tree() -> void:
+	if _sfx_player:
+		_sfx_player.stop()
+		_sfx_playback = null
+		remove_child(_sfx_player)
+		_sfx_player.free()
+
+
+func _setup_buses() -> void:
+	if AudioServer.get_bus_index("SFX") == -1:
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, "SFX")
+		AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
+
+
+func _setup_sfx_player() -> void:
+	_sfx_player = AudioStreamPlayer.new()
+	_sfx_player.bus = "SFX"
+	var poly := AudioStreamPolyphonic.new()
+	poly.polyphony = 32
+	_sfx_player.stream = poly
+	add_child(_sfx_player)
+	_sfx_player.play()
+	_sfx_playback = _sfx_player.get_stream_playback()
 
 
 func _generate_all_sounds() -> void:
@@ -36,58 +73,47 @@ func _generate_all_sounds() -> void:
 	_sounds["ui_cancel"] = SoundGenerator.arpeggio([440.0, 330.0], 0.04, SoundGenerator.Waveform.SINE, -10.0)
 
 
-func _get_player() -> AudioStreamPlayer:
-	for p in _pool:
-		if not p.playing:
-			p.volume_db = 0.0
-			p.pitch_scale = 1.0
-			return p
-	var p := AudioStreamPlayer.new()
-	p.bus = "Master"
-	add_child(p)
-	_pool.append(p)
-	return p
-
-
 func _play(sound_id: String, pitch_scale: float = 1.0, vol_offset_db: float = 0.0) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var cooldown: float = _cooldowns.get(sound_id, DEFAULT_COOLDOWN)
+	var last_time: float = _last_play_times.get(sound_id, -1.0)
+	if now - last_time < cooldown:
+		return
+	_last_play_times[sound_id] = now
+
 	var stream: AudioStreamWAV = _sounds.get(sound_id)
 	if not stream:
 		return
-	var player := _get_player()
-	player.stream = stream
-	player.pitch_scale = pitch_scale
-	player.volume_db = vol_offset_db
-	player.play()
+	if not _sfx_playback:
+		return
+	_sfx_playback.play_stream(stream, 0.0, vol_offset_db, pitch_scale)
 
 
 func _play_noise(sound_id: String, noise_id: String, pitch_scale: float = 1.0) -> void:
 	_play(sound_id, pitch_scale, 0.0)
 	var noise_stream: AudioStreamWAV = _sounds.get(noise_id)
-	if noise_stream:
-		var nplayer := _get_player()
-		nplayer.stream = noise_stream
-		nplayer.pitch_scale = pitch_scale
-		nplayer.play()
+	if noise_stream and _sfx_playback:
+		_sfx_playback.play_stream(noise_stream, 0.0, 0.0, pitch_scale)
 
 
 func play_bow_draw() -> void:
-	if _bow_draw_player and _bow_draw_player.playing:
+	if _bow_draw_stream_idx >= 0 and _sfx_playback:
+		_sfx_playback.set_stream_volume(_bow_draw_stream_idx, -12.0)
 		return
-	_bow_draw_player = _get_player()
-	_bow_draw_player.stream = _sounds["bow_draw"]
-	_bow_draw_player.volume_db = -12.0
-	_bow_draw_player.play()
+	if not _sfx_playback:
+		return
+	_bow_draw_stream_idx = _sfx_playback.play_stream(_sounds["bow_draw"], 0.0, -12.0, 1.0)
 
 
 func set_bow_draw_pitch(charge_t: float) -> void:
-	if _bow_draw_player and _bow_draw_player.playing:
-		_bow_draw_player.pitch_scale = 1.0 + charge_t * 1.5
+	if _bow_draw_stream_idx >= 0 and _sfx_playback:
+		_sfx_playback.set_stream_pitch_scale(_bow_draw_stream_idx, 1.0 + charge_t * 1.5)
 
 
 func stop_bow_draw() -> void:
-	if _bow_draw_player:
-		_bow_draw_player.stop()
-		_bow_draw_player = null
+	if _bow_draw_stream_idx >= 0 and _sfx_playback:
+		_sfx_playback.stop_stream(_bow_draw_stream_idx)
+	_bow_draw_stream_idx = -1
 
 
 func play_bow_fire() -> void:

@@ -86,7 +86,7 @@ func _host_setup() -> void:
 
 	rpc("send_world_config", world_gen.seed_value, world_gen.world_size, world_gen.water_level, spawn_pos)
 
-	MusicManager.play_song(MusicManager.Song.OVERWORLD)
+	MusicManager.play_song(MusicManager.Song.AMBIENT_DRONE)
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 
@@ -219,7 +219,7 @@ func send_world_config(seed_val: int, w_size: float, w_level: float, spawn_pos: 
 		await tween.finished
 		loading.queue_free()
 
-	MusicManager.play_song(MusicManager.Song.OVERWORLD)
+	MusicManager.play_song(MusicManager.Song.AMBIENT_DRONE)
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 

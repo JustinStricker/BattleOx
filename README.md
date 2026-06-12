@@ -107,3 +107,17 @@ res://
 ```bash
 godot -d -s validate.gd 2>&1 | tee -a godot.log
 ```
+
+### Headless Build Check
+
+Run the project headless to catch script errors, parse failures, and autoload issues without opening a window:
+
+```bash
+godot --headless --quit-after 5 2>&1
+```
+
+For verbose output (leaked instances, resource loading):
+
+```bash
+godot --headless --quit-after 5 --verbose 2>&1
+```
